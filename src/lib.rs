@@ -1,10 +1,7 @@
-#![feature(test)]
-
 mod scanner;
 mod token;
 
-#[cfg(test)]
-extern crate test;
+pub use scanner::Source;
 
 pub type BolloxError = Box<dyn std::error::Error>;
 pub type BolloxResult = Result<(), BolloxError>;
@@ -15,8 +12,9 @@ where
 {
     let source = scanner::Source::new(code.as_ref());
 
-    for token in source.into_iter() {
-        println!("{}", token?);
+    for token in source {
+        println!("{:?}", token?);
     }
+
     Ok(())
 }

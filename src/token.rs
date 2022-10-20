@@ -1,7 +1,7 @@
 use std::fmt::Display;
 
-#[derive(Debug, PartialEq)]
-pub(crate) enum TokenType {
+#[derive(Debug, PartialEq, Eq)]
+pub enum TokenType {
     // Single-character tokens
     LeftParen,
     RightParen,
@@ -51,43 +51,28 @@ pub(crate) enum TokenType {
     Eof,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Literal {
-    String(String),
-    Number(f64),
-}
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Token {
     token_type: TokenType,
-    lexeme: String,
-    literal: Option<Literal>,
     line: usize,
+    offset: usize,
+    len: usize,
 }
 
 impl Token {
-    pub(crate) const fn new(
-        token_type: TokenType,
-        lexeme: String,
-        literal: Option<Literal>,
-        line: usize,
-    ) -> Self {
+    pub(crate) const fn new(token_type: TokenType, line: usize, offset: usize, len: usize) -> Self {
         Self {
             token_type,
-            lexeme,
-            literal,
             line,
+            offset,
+            len,
         }
     }
 }
 
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{:?} {} {:?}",
-            self.token_type, self.lexeme, self.literal
-        )?;
+        write!(f, "{:?} {} {}", self.token_type, self.offset, self.len)?;
         Ok(())
     }
 }

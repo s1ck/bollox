@@ -10,3 +10,5 @@ false; // Not *not* false
 "123"; // This is a string, not a number
 
 nil; // Oh null, the bane of my existence
+
+42; // foo [bar]
