@@ -316,19 +316,17 @@ impl<'a> Scanner<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::BolloxError;
 
     fn eof(source: &str) -> Token {
         Token::new(TokenType::Eof, source.lines().count(), source.len(), 0)
     }
 
     #[test]
-    fn test_left_paren() -> Result<(), BolloxError> {
+    fn test_left_paren() {
         let input = "(";
         let source = Source::new(input);
-        let tokens = source.into_iter().collect::<Result<Vec<_>, ScanError>>()?;
+        let tokens = source.scan_all().unwrap();
         let expected_token = Token::new(TokenType::LeftParen, 1, 0, 1);
         assert_eq!(tokens, vec![expected_token, eof(input)]);
-        Ok(())
     }
 }
