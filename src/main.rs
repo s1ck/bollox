@@ -1,7 +1,9 @@
 use std::io::Write;
 use std::path::Path;
 
-fn main() -> bollox::BolloxResult {
+type AppResult = Result<(), std::io::Error>;
+
+fn main() -> AppResult {
     let args = std::env::args_os().collect::<Vec<_>>();
 
     match args.len() {
@@ -16,13 +18,15 @@ fn main() -> bollox::BolloxResult {
     Ok(())
 }
 
-fn run_file(file: impl AsRef<Path>) -> bollox::BolloxResult {
+fn run_file(file: impl AsRef<Path>) -> AppResult {
     let code = std::fs::read_to_string(file)?;
-    bollox::run(code)?;
+    if let Err(bollox_errors) = bollox::run(code) {
+        println!("{:?}", miette::Report::new(bollox_errors))
+    };
     Ok(())
 }
 
-fn run_repl() -> bollox::BolloxResult {
+fn run_repl() -> AppResult {
     let stdin = std::io::stdin();
     let mut line = String::new();
 
@@ -35,7 +39,10 @@ fn run_repl() -> bollox::BolloxResult {
         if line == "quit" {
             break;
         }
-        bollox::run(line)?;
+
+        if let Err(bollox_errors) = bollox::run(line) {
+            println!("{:?}", miette::Report::new(bollox_errors))
+        };
     }
     Ok(())
 }

@@ -1,20 +1,10 @@
-use std::{fmt::Display, iter::Chain, str::CharIndices};
+mod error;
+
+use std::{iter::Chain, str::CharIndices};
 
 use crate::token::{Token, TokenType};
 
-#[derive(Debug)]
-pub struct ParseError {
-    desc: String,
-}
-
-impl Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.desc)?;
-        Ok(())
-    }
-}
-
-impl std::error::Error for ParseError {}
+pub use self::error::ScanError;
 
 struct PeekPeekIterator<I: Iterator> {
     iter: I,
@@ -68,12 +58,30 @@ impl<'a> Source<'a> {
     pub fn new(source: &'a str) -> Self {
         Source { source }
     }
+
+    pub fn scan_all(self) -> Result<Vec<Token>, Vec<ScanError>> {
+        let mut oks = Vec::new();
+        let mut errs = Vec::new();
+
+        for i in self {
+            match i {
+                Ok(t) => oks.push(t),
+                Err(e) => errs.push(e),
+            }
+        }
+
+        if !errs.is_empty() {
+            Err(errs)
+        } else {
+            Ok(oks)
+        }
+    }
 }
 
 impl<'a> IntoIterator for Source<'a> {
-    type Item = Result<Token, ParseError>;
+    type Item = Result<Token, ScanError>;
 
-    type IntoIter = Chain<Scanner<'a>, core::option::IntoIter<Result<Token, ParseError>>>;
+    type IntoIter = Chain<Scanner<'a>, core::option::IntoIter<Result<Token, ScanError>>>;
 
     fn into_iter(self) -> Self::IntoIter {
         let line = self.source.lines().count();
@@ -92,7 +100,7 @@ pub struct Scanner<'a> {
 }
 
 impl<'a> Iterator for Scanner<'a> {
-    type Item = Result<Token, ParseError>;
+    type Item = Result<Token, ScanError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -120,7 +128,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn scan_token(&mut self) -> Option<Result<Token, ParseError>> {
+    fn scan_token(&mut self) -> Option<Result<Token, ScanError>> {
         let token_type = match self.advance() {
             '(' => TokenType::LeftParen,
             ')' => TokenType::RightParen,
@@ -179,9 +187,10 @@ impl<'a> Scanner<'a> {
             c if c.is_ascii_digit() => return Some(self.number()),
             c if c.is_alphabetic() => self.identifier(),
             c => {
-                return Some(Err(ParseError {
-                    desc: format!("Unexpected character {}.", c),
-                }))
+                return Some(Err(ScanError::unexpected_token(
+                    (self.start, self.current - self.start).into(),
+                    c,
+                )))
             }
         };
 
@@ -219,7 +228,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn string(&mut self) -> Result<Token, ParseError> {
+    fn string(&mut self) -> Result<Token, ScanError> {
         while self.peek() != '"' && !self.is_at_end() {
             if self.peek() == '\n' {
                 self.line += 1;
@@ -228,9 +237,9 @@ impl<'a> Scanner<'a> {
         }
 
         if self.is_at_end() {
-            return Err(ParseError {
-                desc: "Unterminated string.".to_string(),
-            });
+            return Err(ScanError::unterminated_string(
+                (self.start..self.current - self.start).into(),
+            ));
         }
 
         self.advance(); // The closing ".
@@ -241,7 +250,7 @@ impl<'a> Scanner<'a> {
         Ok(Token::new(TokenType::String, self.line, offset, len))
     }
 
-    fn number(&mut self) -> Result<Token, ParseError> {
+    fn number(&mut self) -> Result<Token, ScanError> {
         while self.peek().is_ascii_digit() {
             self.advance();
         }
@@ -317,7 +326,7 @@ mod tests {
     fn test_left_paren() -> Result<(), BolloxError> {
         let input = "(";
         let source = Source::new(input);
-        let tokens = source.into_iter().collect::<Result<Vec<_>, ParseError>>()?;
+        let tokens = source.into_iter().collect::<Result<Vec<_>, ScanError>>()?;
         let expected_token = Token::new(TokenType::LeftParen, 1, 0, 1);
         assert_eq!(tokens, vec![expected_token, eof(input)]);
         Ok(())
