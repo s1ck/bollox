@@ -1,6 +1,50 @@
-use std::fmt::Display;
+use std::ops::Range;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Token {
+    pub tpe: TokenType,
+    pub line: usize,
+    pub span: Span,
+}
+
+impl Token {
+    pub const fn new(tpe: TokenType, line: usize, offset: usize, len: usize) -> Self {
+        Self {
+            tpe,
+            line,
+            span: Span::new(offset, len),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Span {
+    pub offset: usize,
+    pub len: usize,
+}
+
+impl Span {
+    pub const fn new(offset: usize, len: usize) -> Self {
+        Self { offset, len }
+    }
+}
+
+impl From<Range<usize>> for Span {
+    fn from(range: Range<usize>) -> Self {
+        Self {
+            offset: range.start,
+            len: range.len(),
+        }
+    }
+}
+
+impl From<Span> for Range<usize> {
+    fn from(span: Span) -> Self {
+        span.offset..(span.offset + span.len)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TokenType {
     // Single-character tokens
     LeftParen,
@@ -51,28 +95,26 @@ pub enum TokenType {
     Eof,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Token {
-    pub token_type: TokenType,
-    line: usize,
-    offset: usize,
-    len: usize,
-}
-
-impl Token {
-    pub(crate) const fn new(token_type: TokenType, line: usize, offset: usize, len: usize) -> Self {
-        Self {
-            token_type,
-            line,
-            offset,
-            len,
+impl From<&str> for TokenType {
+    fn from(ident: &str) -> Self {
+        match ident {
+            "and" => Self::And,
+            "class" => Self::Class,
+            "else" => Self::Else,
+            "false" => Self::False,
+            "for" => Self::For,
+            "fun" => Self::Fun,
+            "if" => Self::If,
+            "nil" => Self::Nil,
+            "or" => Self::Or,
+            "print" => Self::Print,
+            "return" => Self::Return,
+            "super" => Self::Super,
+            "this" => Self::This,
+            "true" => Self::True,
+            "var" => Self::Var,
+            "while" => Self::While,
+            _ => Self::Identifier,
         }
-    }
-}
-
-impl Display for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?} {} {}", self.token_type, self.offset, self.len)?;
-        Ok(())
     }
 }

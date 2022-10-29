@@ -206,26 +206,7 @@ impl<'a> Scanner<'a> {
         while self.peek().is_alphanumeric() {
             self.advance();
         }
-
-        match &self.source.source[self.start..self.current] {
-            "and" => TokenType::And,
-            "class" => TokenType::Class,
-            "else" => TokenType::Else,
-            "false" => TokenType::False,
-            "for" => TokenType::For,
-            "fun" => TokenType::Fun,
-            "if" => TokenType::If,
-            "nil" => TokenType::Nil,
-            "or" => TokenType::Or,
-            "print" => TokenType::Print,
-            "return" => TokenType::Return,
-            "super" => TokenType::Super,
-            "this" => TokenType::This,
-            "true" => TokenType::True,
-            "var" => TokenType::Var,
-            "while" => TokenType::While,
-            _ => TokenType::Identifier,
-        }
+        TokenType::from(&self.source.source[self.start..self.current])
     }
 
     fn string(&mut self) -> Result<Token, ScanError> {
