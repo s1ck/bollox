@@ -1,13 +1,16 @@
 use std::fmt::Display;
 
+use crate::token::{Range, Span};
+
 #[derive(Clone, Debug)]
 pub struct Expr {
     node: Box<Node>,
+    span: Span,
 }
 
 impl Expr {
-    pub fn new(node: Box<Node>) -> Self {
-        Self { node }
+    pub fn new(node: Box<Node>, span: Span) -> Self {
+        Self { node, span }
     }
 }
 
@@ -15,11 +18,23 @@ impl Expr {
 pub enum Node<T: Sized = Expr> {
     Unary { op: UnaryOp, expr: T },
     Binary { lhs: T, op: BinaryOp, rhs: T },
-    Grouping { expr: T },
+    Group { expr: T },
     Literal { lit: Literal },
 }
 
+impl Node {
+    pub fn into_expr(self, range: Range) -> Expr {
+        Expr {
+            node: Box::new(self),
+            span: Span::from(range),
+        }
+    }
+}
+
 impl<T: Sized> Node<T> {
+    pub fn group(expr: T) -> Self {
+        Self::Group { expr }
+    }
     pub fn string() -> Self {
         Self::Literal {
             lit: Literal::String,
@@ -193,5 +208,58 @@ impl Display for BinaryOp {
             Self::Mul => f.write_str("*"),
             Self::Div => f.write_str("/"),
         }
+    }
+}
+
+#[cfg(test)]
+fn print(expr: Expr, source: &str) -> String {
+    fn visit(expr: Expr, source: &str, res: &mut String) {
+        match *expr.node {
+            Node::Unary { op, expr } => parenthesize(source, op, Some(expr), res),
+            Node::Binary { lhs, op, rhs } => parenthesize(source, op, [lhs, rhs], res),
+            Node::Group { expr } => parenthesize(source, "group", Some(expr), res),
+            Node::Literal { lit: _ } => res.push_str(&source[Range::from(expr.span)]),
+        }
+    }
+
+    fn parenthesize(
+        source: &str,
+        name: impl Display,
+        exprs: impl IntoIterator<Item = Expr>,
+        res: &mut String,
+    ) {
+        use std::fmt::Write;
+
+        res.push('(');
+        write!(res, "{name}").unwrap();
+
+        for expr in exprs {
+            res.push(' ');
+            visit(expr, source, res);
+        }
+
+        res.push(')');
+    }
+
+    let mut res = String::new();
+    visit(expr, source, &mut res);
+    res
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_print() {
+        let input = "-123 * (45.67)";
+
+        let num = Node::number().into_expr(1..4);
+        let neg = Node::neg(num).into_expr(0..4);
+        let num = Node::number().into_expr(8..13);
+        let grp = Node::group(num).into_expr(7..14);
+        let ast = Node::mul(neg, grp).into_expr(0..14);
+
+        assert_eq!(print(ast, input), "(* (- 123) (group 45.67))");
     }
 }

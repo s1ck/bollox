@@ -1,4 +1,4 @@
-use std::ops::Range;
+pub type Range = std::ops::Range<usize>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Token {
@@ -29,8 +29,8 @@ impl Span {
     }
 }
 
-impl From<Range<usize>> for Span {
-    fn from(range: Range<usize>) -> Self {
+impl From<Range> for Span {
+    fn from(range: Range) -> Self {
         Self {
             offset: range.start,
             len: range.len(),
@@ -38,7 +38,7 @@ impl From<Range<usize>> for Span {
     }
 }
 
-impl From<Span> for Range<usize> {
+impl From<Span> for Range {
     fn from(span: Span) -> Self {
         span.offset..(span.offset + span.len)
     }
