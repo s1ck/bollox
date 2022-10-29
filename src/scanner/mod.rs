@@ -51,7 +51,7 @@ impl<I: Iterator> Iterator for PeekPeekIterator<I> {
 }
 
 pub struct Source<'a> {
-    source: &'a str,
+    pub(crate) source: &'a str,
 }
 
 impl<'a> Source<'a> {

@@ -1,3 +1,4 @@
+mod ast;
 mod error;
 mod scanner;
 mod token;
