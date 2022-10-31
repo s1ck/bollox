@@ -1,0 +1,16 @@
+vec![
+	Token::new(Print, 1, 0, 5),
+	Token::new(String, 1, 7, 13),
+	Token::new(Semicolon, 1, 21, 1),
+	Token::new(String, 3, 25, 15),
+	Token::new(Semicolon, 3, 41, 1),
+	Token::new(LeftBrace, 5, 44, 1),
+	Token::new(Print, 6, 50, 5),
+	Token::new(String, 6, 57, 14),
+	Token::new(Semicolon, 6, 72, 1),
+	Token::new(Print, 7, 78, 5),
+	Token::new(String, 7, 85, 15),
+	Token::new(Semicolon, 7, 101, 1),
+	Token::new(RightBrace, 8, 103, 1),
+	Token::new(Eof, 8, 105, 0),
+]

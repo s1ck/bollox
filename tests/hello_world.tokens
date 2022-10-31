@@ -1,0 +1,5 @@
+vec![
+	Token::new(Print,2, 28, 5),
+	Token::new(String,2, 35, 13),
+	Token::new(Eof,2, 50, 0),
+]

@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-mod ast;
-mod error;
-mod scanner;
-mod token;
+pub mod ast;
+pub mod error;
+pub mod scanner;
+pub mod token;
 
 use error::BolloxErrors;
 pub use scanner::Source;
