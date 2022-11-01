@@ -246,6 +246,30 @@ fn print(expr: Expr, source: &str) -> String {
     res
 }
 
+// Challenge 5.3: Reverse Polish Notation
+#[cfg(test)]
+fn print_rpn(expr: Expr, source: &str) -> String {
+    fn visit(expr: Expr, source: &str, res: &mut Vec<String>) {
+        match *expr.node {
+            Node::Unary { op, expr } => {
+                res.push(op.to_string());
+                visit(expr, source, res);
+            }
+            Node::Binary { lhs, op, rhs } => {
+                visit(lhs, source, res);
+                visit(rhs, source, res);
+                res.push(op.to_string());
+            }
+            Node::Group { expr } => visit(expr, source, res),
+            Node::Literal { lit: _ } => res.push((&source[Range::from(expr.span)]).to_string()),
+        }
+    }
+
+    let mut res = Vec::new();
+    visit(expr, source, &mut res);
+    res.join(" ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -261,5 +285,24 @@ mod tests {
         let ast = Node::mul(neg, grp).into_expr(0..14);
 
         assert_eq!(print(ast, input), "(* (- 123) (group 45.67))");
+    }
+
+    #[test]
+    fn test_print_rpn() {
+        let input = "(1 + 2) * (4 - 3)";
+
+        let num1 = Node::number().into_expr(1..2);
+        let num2 = Node::number().into_expr(5..6);
+        let add = Node::add(num1, num2).into_expr(1..6);
+        let grp0 = Node::group(add).into_expr(0..7);
+
+        let num1 = Node::number().into_expr(11..12);
+        let num2 = Node::number().into_expr(15..16);
+        let sub = Node::sub(num1, num2).into_expr(11..16);
+        let grp1 = Node::group(sub).into_expr(10..17);
+
+        let ast = Node::mul(grp0, grp1).into_expr(0..17);
+
+        assert_eq!(print_rpn(ast, input), "1 2 + 4 3 - *");
     }
 }
