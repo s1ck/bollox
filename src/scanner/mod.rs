@@ -50,6 +50,7 @@ impl<I: Iterator> Iterator for PeekPeekIterator<I> {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Source<'a> {
     pub(crate) source: &'a str,
 }

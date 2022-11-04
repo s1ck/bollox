@@ -15,6 +15,10 @@ impl Token {
             span: Span::new(offset, len),
         }
     }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,6 +45,12 @@ impl From<Range> for Span {
 impl From<Span> for Range {
     fn from(span: Span) -> Self {
         span.offset..(span.offset + span.len)
+    }
+}
+
+impl Span {
+    pub fn union(self, other: Self) -> Range {
+        self.offset..(other.offset + other.len)
     }
 }
 
