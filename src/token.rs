@@ -1,3 +1,5 @@
+use miette::SourceSpan;
+
 pub type Range = std::ops::Range<usize>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -45,6 +47,12 @@ impl From<Range> for Span {
 impl From<Span> for Range {
     fn from(span: Span) -> Self {
         span.offset..(span.offset + span.len)
+    }
+}
+
+impl From<Span> for SourceSpan {
+    fn from(span: Span) -> Self {
+        Range::from(span).into()
     }
 }
 

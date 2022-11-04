@@ -1,24 +1,15 @@
-// LOX Grammar
-//
-// expression → equality ;
-// equality   → comparison ( ( "!=" | "==" ) comparison )* ;
-// comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-// term       → factor ( ( "-" | "+" ) factor )* ;
-// factor     → unary ( ( "/" | "*" ) unary )* ;
-// unary      → ( "!" | "-" ) unary | primary ;
-// primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
-
 use std::ops::Range;
 
 use crate::{
     ast::{BinaryOp, Expr, Literal, Node, UnaryOp},
+    error::SyntaxError,
     token::{Token, TokenType},
     Source,
 };
 use TokenType::*;
 
 pub trait Parser<'a> {
-    fn parse(self) -> Expr<'a>;
+    fn parse(self) -> Result<Expr<'a>, SyntaxError>;
 }
 
 pub struct RecursiveDescent<'a> {
@@ -38,23 +29,23 @@ impl<'a> RecursiveDescent<'a> {
 }
 
 impl<'a> Parser<'a> for RecursiveDescent<'a> {
-    fn parse(mut self) -> Expr<'a> {
+    fn parse(mut self) -> Result<Expr<'a>, SyntaxError> {
         self.expression()
     }
 }
 
 impl<'a> RecursiveDescent<'a> {
     // expression → equality ;
-    fn expression(&mut self) -> Expr<'a> {
+    fn expression(&mut self) -> Result<Expr<'a>, SyntaxError> {
         self.equality()
     }
     // equality   → comparison ( ( "!=" | "==" ) comparison )* ;
-    fn equality(&mut self) -> Expr<'a> {
-        let mut lhs = self.comparison();
+    fn equality(&mut self) -> Result<Expr<'a>, SyntaxError> {
+        let mut lhs = self.comparison()?;
 
         while self.matches([BangEqual, EqualEqual]) {
             let op = self.previous();
-            let rhs = self.comparison();
+            let rhs = self.comparison()?;
             let range = lhs.span().union(rhs.span());
 
             let op = match op.tpe {
@@ -66,15 +57,15 @@ impl<'a> RecursiveDescent<'a> {
             lhs = Node::binary(lhs, op, rhs).into_expr(range);
         }
 
-        lhs
+        Ok(lhs)
     }
     // comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-    fn comparison(&mut self) -> Expr<'a> {
-        let mut lhs = self.term();
+    fn comparison(&mut self) -> Result<Expr<'a>, SyntaxError> {
+        let mut lhs = self.term()?;
 
         while self.matches([Greater, GreaterEqual, Less, LessEqual]) {
             let op = self.previous();
-            let rhs = self.term();
+            let rhs = self.term()?;
             let range = lhs.span().union(rhs.span());
 
             let op = match op.tpe {
@@ -88,15 +79,15 @@ impl<'a> RecursiveDescent<'a> {
             lhs = Node::binary(lhs, op, rhs).into_expr(range);
         }
 
-        lhs
+        Ok(lhs)
     }
     // term       → factor ( ( "-" | "+" ) factor )* ;
-    fn term(&mut self) -> Expr<'a> {
-        let mut lhs = self.factor();
+    fn term(&mut self) -> Result<Expr<'a>, SyntaxError> {
+        let mut lhs = self.factor()?;
 
         while self.matches([Minus, Plus]) {
             let op = self.previous();
-            let rhs = self.factor();
+            let rhs = self.factor()?;
             let range = lhs.span().union(rhs.span());
 
             let op = match op.tpe {
@@ -108,15 +99,15 @@ impl<'a> RecursiveDescent<'a> {
             lhs = Node::binary(lhs, op, rhs).into_expr(range);
         }
 
-        lhs
+        Ok(lhs)
     }
     // factor     → unary ( ( "/" | "*" ) unary )* ;
-    fn factor(&mut self) -> Expr<'a> {
-        let mut lhs = self.unary();
+    fn factor(&mut self) -> Result<Expr<'a>, SyntaxError> {
+        let mut lhs = self.unary()?;
 
         while self.matches([Slash, Star]) {
             let op = self.previous();
-            let rhs = self.unary();
+            let rhs = self.unary()?;
             let range = lhs.span().union(rhs.span());
 
             let op = match op.tpe {
@@ -128,13 +119,13 @@ impl<'a> RecursiveDescent<'a> {
             lhs = Node::binary(lhs, op, rhs).into_expr(range);
         }
 
-        lhs
+        Ok(lhs)
     }
     // unary      → ( "!" | "-" ) unary | primary ;
-    fn unary(&mut self) -> Expr<'a> {
+    fn unary(&mut self) -> Result<Expr<'a>, SyntaxError> {
         if self.matches([Bang, Minus]) {
             let op = self.previous();
-            let rhs = self.unary();
+            let rhs = self.unary()?;
             let range = op.span().union(rhs.span());
 
             let op = match op.tpe {
@@ -143,19 +134,19 @@ impl<'a> RecursiveDescent<'a> {
                 _ => unreachable!(),
             };
 
-            Node::unary(op, rhs).into_expr(range)
+            Ok(Node::unary(op, rhs).into_expr(range))
         } else {
             self.primary()
         }
     }
     // primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
-    fn primary(&mut self) -> Expr<'a> {
+    fn primary(&mut self) -> Result<Expr<'a>, SyntaxError> {
         if self.matches([False]) {
-            return Node::fals().into_expr(self.previous().span().into());
+            return Ok(Node::fals().into_expr(self.previous().span().into()));
         } else if self.matches([True]) {
-            return Node::tru().into_expr(self.previous().span().into());
+            return Ok(Node::tru().into_expr(self.previous().span().into()));
         } else if self.matches([Nil]) {
-            return Node::nil().into_expr(self.previous().span().into());
+            return Ok(Node::nil().into_expr(self.previous().span().into()));
         };
 
         if self.matches([Number, String]) {
@@ -169,18 +160,21 @@ impl<'a> RecursiveDescent<'a> {
                 _ => unreachable!(),
             };
 
-            return Node::literal(lit).into_expr(Range::<usize>::from(span));
+            return Ok(Node::literal(lit).into_expr(Range::<usize>::from(span)));
         }
 
         if self.matches([LeftParen]) {
-            let expr = self.expression();
+            let expr = self.expression()?;
             let span = expr.span();
-            self.consume(RightParen, "Expect ')' after expression.");
-            return Node::group(expr).into_expr(span.into());
+            return if self.consume(RightParen).is_none() {
+                Err(SyntaxError::missing_closing_parenthesis(span.into()))
+            } else {
+                Ok(Node::group(expr).into_expr(span.into()))
+            };
         }
 
-        // TODO error handling
-        todo!()
+        let peek = self.peek();
+        Err(SyntaxError::unsupported_token(peek, peek.span().into()))
     }
 }
 
@@ -192,7 +186,7 @@ impl RecursiveDescent<'_> {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     fn check(&mut self, token_type: TokenType) -> bool {
@@ -222,13 +216,11 @@ impl RecursiveDescent<'_> {
         self.tokens[self.current - 1]
     }
 
-    fn consume(&mut self, token_type: TokenType, _error_message: &str) -> Token {
+    fn consume(&mut self, token_type: TokenType) -> Option<Token> {
         if self.check(token_type) {
-            return self.advance();
+            return Some(self.advance());
         }
-
-        // TODO error handling
-        todo!()
+        None
     }
 }
 
@@ -237,17 +229,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_simple_parser() {
+    fn test_simple_parser() -> Result<(), SyntaxError> {
         let source = "4 + 2";
         let source = Source::new(source);
         let tokens = source.scan_all().unwrap();
         let parser = RecursiveDescent::new(source, tokens);
-        let expres = parser.parse();
+        let expres = parser.parse()?;
 
         let num0 = Node::number(4_f64).into_expr(0..1);
         let num1 = Node::number(2_f64).into_expr(4..5);
         let expr = Node::add(num0, num1).into_expr(0..5);
 
         assert_eq!(expres, expr);
+
+        Ok(())
     }
 }
