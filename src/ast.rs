@@ -2,28 +2,32 @@ use std::fmt::Display;
 
 use crate::token::{Range, Span};
 
-#[derive(Clone, Debug)]
-pub struct Expr {
-    node: Box<Node>,
+#[derive(Clone, Debug, PartialEq)]
+pub struct Expr<'a> {
+    node: Box<Node<'a>>,
     span: Span,
 }
 
-impl Expr {
-    pub fn new(node: Box<Node>, span: Span) -> Self {
+impl<'a> Expr<'a> {
+    pub fn new(node: Box<Node<'a>>, span: Span) -> Self {
         Self { node, span }
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum Node<T: Sized = Expr> {
+#[derive(Clone, Debug, PartialEq)]
+pub enum Node<'a, T: Sized = Expr<'a>> {
     Unary { op: UnaryOp, expr: T },
     Binary { lhs: T, op: BinaryOp, rhs: T },
     Group { expr: T },
-    Literal { lit: Literal },
+    Literal { lit: Literal<'a> },
 }
 
-impl Node {
-    pub fn into_expr(self, range: Range) -> Expr {
+impl<'a> Node<'a> {
+    pub fn into_expr(self, range: Range) -> Expr<'a> {
         Expr {
             node: Box::new(self),
             span: Span::from(range),
@@ -31,19 +35,32 @@ impl Node {
     }
 }
 
-impl<T: Sized> Node<T> {
+impl<'a, T: Sized> Node<'a, T> {
+    pub fn unary(op: UnaryOp, expr: T) -> Self {
+        Self::Unary { op, expr }
+    }
+
+    pub fn binary(lhs: T, op: BinaryOp, rhs: T) -> Self {
+        Self::Binary { lhs, op, rhs }
+    }
+
     pub fn group(expr: T) -> Self {
         Self::Group { expr }
     }
-    pub fn string() -> Self {
+
+    pub fn literal(lit: Literal<'a>) -> Self {
+        Self::Literal { lit }
+    }
+
+    pub fn string(s: &'a str) -> Self {
         Self::Literal {
-            lit: Literal::String,
+            lit: Literal::String(s),
         }
     }
 
-    pub fn number() -> Self {
+    pub fn number(num: f64) -> Self {
         Self::Literal {
-            lit: Literal::Number,
+            lit: Literal::Number(num),
         }
     }
 
@@ -156,13 +173,13 @@ impl<T: Sized> Node<T> {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum UnaryOp {
     Neg,
     Not,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum BinaryOp {
     Equals,
     NotEquals,
@@ -176,10 +193,10 @@ pub enum BinaryOp {
     Div,
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum Literal {
-    String,
-    Number,
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Literal<'a> {
+    String(&'a str),
+    Number(f64),
     True,
     False,
     Nil,
@@ -211,6 +228,64 @@ impl Display for BinaryOp {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum Associativity {
+    Left,
+    Right,
+}
+
+pub trait Associates {
+    fn associates(&self) -> Associativity;
+}
+
+impl Associates for UnaryOp {
+    fn associates(&self) -> Associativity {
+        Associativity::Right
+    }
+}
+
+impl Associates for BinaryOp {
+    fn associates(&self) -> Associativity {
+        Associativity::Left
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PrecedenceGroup {
+    Equality,
+    Comparison,
+    Term,
+    Factor,
+    Unary,
+}
+
+pub trait Precedence {
+    fn precedence(&self) -> PrecedenceGroup;
+}
+
+impl Precedence for UnaryOp {
+    fn precedence(&self) -> PrecedenceGroup {
+        PrecedenceGroup::Unary
+    }
+}
+
+impl Precedence for BinaryOp {
+    fn precedence(&self) -> PrecedenceGroup {
+        match self {
+            BinaryOp::Equals => PrecedenceGroup::Equality,
+            BinaryOp::NotEquals => PrecedenceGroup::Equality,
+            BinaryOp::LessThan => PrecedenceGroup::Comparison,
+            BinaryOp::LessThanOrEqual => PrecedenceGroup::Comparison,
+            BinaryOp::GreaterThan => PrecedenceGroup::Comparison,
+            BinaryOp::GreaterThanOrEqual => PrecedenceGroup::Comparison,
+            BinaryOp::Add => PrecedenceGroup::Term,
+            BinaryOp::Sub => PrecedenceGroup::Term,
+            BinaryOp::Mul => PrecedenceGroup::Factor,
+            BinaryOp::Div => PrecedenceGroup::Factor,
+        }
+    }
+}
+
 #[cfg(test)]
 fn print(expr: Expr, source: &str) -> String {
     fn visit(expr: Expr, source: &str, res: &mut String) {
@@ -222,10 +297,10 @@ fn print(expr: Expr, source: &str) -> String {
         }
     }
 
-    fn parenthesize(
-        source: &str,
+    fn parenthesize<'a>(
+        source: &'a str,
         name: impl Display,
-        exprs: impl IntoIterator<Item = Expr>,
+        exprs: impl IntoIterator<Item = Expr<'a>>,
         res: &mut String,
     ) {
         use std::fmt::Write;
@@ -278,9 +353,9 @@ mod tests {
     fn test_print() {
         let input = "-123 * (45.67)";
 
-        let num = Node::number().into_expr(1..4);
+        let num = Node::number(123_f64).into_expr(1..4);
         let neg = Node::neg(num).into_expr(0..4);
-        let num = Node::number().into_expr(8..13);
+        let num = Node::number(45.67).into_expr(8..13);
         let grp = Node::group(num).into_expr(7..14);
         let ast = Node::mul(neg, grp).into_expr(0..14);
 
@@ -291,13 +366,13 @@ mod tests {
     fn test_print_rpn() {
         let input = "(1 + 2) * (4 - 3)";
 
-        let num1 = Node::number().into_expr(1..2);
-        let num2 = Node::number().into_expr(5..6);
+        let num1 = Node::number(1_f64).into_expr(1..2);
+        let num2 = Node::number(2_f64).into_expr(5..6);
         let add = Node::add(num1, num2).into_expr(1..6);
         let grp0 = Node::group(add).into_expr(0..7);
 
-        let num1 = Node::number().into_expr(11..12);
-        let num2 = Node::number().into_expr(15..16);
+        let num1 = Node::number(4_f64).into_expr(11..12);
+        let num2 = Node::number(3_f64).into_expr(15..16);
         let sub = Node::sub(num1, num2).into_expr(11..16);
         let grp1 = Node::group(sub).into_expr(10..17);
 

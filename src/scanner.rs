@@ -1,10 +1,9 @@
-mod error;
-
 use std::{iter::Chain, str::CharIndices};
 
-use crate::token::{Token, TokenType};
-
-pub use self::error::ScanError;
+use crate::{
+    error::ScanError,
+    token::{Token, TokenType},
+};
 
 struct PeekPeekIterator<I: Iterator> {
     iter: I,
@@ -50,6 +49,7 @@ impl<I: Iterator> Iterator for PeekPeekIterator<I> {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Source<'a> {
     pub(crate) source: &'a str,
 }
