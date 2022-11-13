@@ -1,7 +1,7 @@
 use std::{iter::Chain, str::CharIndices};
 
 use crate::{
-    error::ScanError,
+    error::{BolloxError, ScanError},
     token::{Token, TokenType},
 };
 
@@ -59,7 +59,7 @@ impl<'a> Source<'a> {
         Source { source }
     }
 
-    pub fn scan_all(self) -> Result<Vec<Token>, Vec<ScanError>> {
+    pub fn scan_all(self) -> Result<Vec<Token>, Vec<BolloxError>> {
         let mut oks = Vec::new();
         let mut errs = Vec::new();
 
@@ -79,9 +79,9 @@ impl<'a> Source<'a> {
 }
 
 impl<'a> IntoIterator for Source<'a> {
-    type Item = Result<Token, ScanError>;
+    type Item = Result<Token, BolloxError>;
 
-    type IntoIter = Chain<Scanner<'a>, core::option::IntoIter<Result<Token, ScanError>>>;
+    type IntoIter = Chain<Scanner<'a>, core::option::IntoIter<Result<Token, BolloxError>>>;
 
     fn into_iter(self) -> Self::IntoIter {
         let line = self.source.lines().count();
@@ -100,7 +100,7 @@ pub struct Scanner<'a> {
 }
 
 impl<'a> Iterator for Scanner<'a> {
-    type Item = Result<Token, ScanError>;
+    type Item = Result<Token, BolloxError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -108,9 +108,9 @@ impl<'a> Iterator for Scanner<'a> {
                 return None;
             }
             self.start = self.current;
-            let token = self.scan_token();
-            if token.is_some() {
-                return token;
+
+            if let Some(result) = self.scan_token() {
+                return Some(result.map_err(BolloxError::from));
             }
         }
     }

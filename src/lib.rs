@@ -6,9 +6,12 @@ pub mod parser;
 pub mod scanner;
 pub mod token;
 
-use error::BolloxErrors;
-use parser::{Parser, RecursiveDescent};
+use std::cell::Cell;
+
+use error::{BolloxError, BolloxErrors};
 pub use scanner::Source;
+
+use crate::{ast::Expr, parser::parser};
 
 pub type BolloxResult = Result<(), BolloxErrors>;
 
@@ -16,32 +19,44 @@ pub fn run<T>(code: T) -> BolloxResult
 where
     T: AsRef<str> + std::fmt::Display,
 {
-    let source = scanner::Source::new(code.as_ref());
-    let result = source.scan_all();
-
-    let Ok(tokens) = result else {
-        let scan_errors = result.unwrap_err();
-        let bollox_errors = BolloxErrors {
-            src: code.to_string(),
-            nested: scan_errors.into_iter().map(Into::into).collect(),
-        };
-        return Err(bollox_errors);
+    let errors = Cell::new(Vec::new());
+    let store_err = |e: BolloxError| {
+        let mut errs = errors.take();
+        errs.push(e);
+        errors.set(errs);
     };
 
     let source = scanner::Source::new(code.as_ref());
-    let parser = RecursiveDescent::new(source, tokens);
-    let result = parser.parse();
 
-    let Ok(expr) = result else {
-        let syntax_error = result.unwrap_err();
-        let bollox_errors = BolloxErrors {
+    // scan
+    let tokens = source.into_iter().filter_map(|t| match t {
+        Ok(t) => Some(t),
+        Err(e) => {
+            store_err(e);
+            None
+        }
+    });
+
+    // parse
+    let result = parser(source, tokens)
+        .filter_map(|e| match e {
+            Ok(e) => Some(e),
+            Err(e) => {
+                store_err(e);
+                None
+            }
+        })
+        .collect::<Option<Expr>>();
+
+    let errors = errors.into_inner();
+
+    if errors.is_empty() {
+        println!("{result:#?}");
+        Ok(())
+    } else {
+        Err(BolloxErrors {
             src: code.to_string(),
-            nested: vec![syntax_error.into()],
-        };
-        return Err(bollox_errors);
-    };
-
-    println!("{expr:#?}");
-
-    Ok(())
+            nested: errors.into_iter().map(Into::into).collect(),
+        })
+    }
 }

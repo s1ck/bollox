@@ -18,6 +18,12 @@ impl<'a> Expr<'a> {
     }
 }
 
+impl<'a> FromIterator<Expr<'a>> for Option<Expr<'a>> {
+    fn from_iter<T: IntoIterator<Item = Expr<'a>>>(iter: T) -> Self {
+        iter.into_iter().next()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Node<'a, T: Sized = Expr<'a>> {
     Unary { op: UnaryOp, expr: T },

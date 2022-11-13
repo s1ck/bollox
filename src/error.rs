@@ -1,7 +1,7 @@
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
-use crate::token::Token;
+use crate::token::{Span, TokenType};
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 #[error("Errors while running Lox code")]
@@ -81,7 +81,11 @@ pub enum SyntaxError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    UnsupportedToken(UnsupportedToken),
+    UnsupportedToken(UnsupportedTokenType),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnexpectedEndOfInput(UnexpectedEndOfInput),
 }
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -93,21 +97,33 @@ pub struct MissingClosingParenthesis {
 }
 
 #[derive(Clone, Debug, Error, Diagnostic)]
-#[error("Unsupported token {:?}.", found)]
+#[error("Unsupported token type {:?}.", found)]
 #[diagnostic()]
-pub struct UnsupportedToken {
-    found: Token,
+pub struct UnsupportedTokenType {
+    found: TokenType,
     #[label("{}", self)]
     span: SourceSpan,
 }
 
+#[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Unsupported end of input")]
+#[diagnostic()]
+pub struct UnexpectedEndOfInput;
+
 impl SyntaxError {
-    pub fn missing_closing_parenthesis(span: SourceSpan) -> Self {
-        Self::from(MissingClosingParenthesis { span })
+    pub fn missing_closing_parenthesis(span: Span) -> Self {
+        Self::from(MissingClosingParenthesis { span: span.into() })
     }
 
-    pub fn unsupported_token(token: Token, span: SourceSpan) -> Self {
-        Self::from(UnsupportedToken { found: token, span })
+    pub fn unsupported_token_type(token: TokenType, span: Span) -> Self {
+        Self::from(UnsupportedTokenType {
+            found: token,
+            span: span.into(),
+        })
+    }
+
+    pub fn unexpected_eoi() -> Self {
+        Self::from(UnexpectedEndOfInput)
     }
 }
 
@@ -117,8 +133,14 @@ impl From<MissingClosingParenthesis> for SyntaxError {
     }
 }
 
-impl From<UnsupportedToken> for SyntaxError {
-    fn from(unsupported_token: UnsupportedToken) -> Self {
+impl From<UnsupportedTokenType> for SyntaxError {
+    fn from(unsupported_token: UnsupportedTokenType) -> Self {
         Self::UnsupportedToken(unsupported_token)
+    }
+}
+
+impl From<UnexpectedEndOfInput> for SyntaxError {
+    fn from(unexpected_eoi: UnexpectedEndOfInput) -> Self {
+        Self::UnexpectedEndOfInput(unexpected_eoi)
     }
 }
