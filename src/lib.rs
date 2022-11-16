@@ -2,6 +2,7 @@
 
 pub mod ast;
 pub mod error;
+pub mod eval;
 pub mod parser;
 pub mod scanner;
 pub mod token;
@@ -9,13 +10,14 @@ pub mod token;
 use std::cell::Cell;
 
 use error::{BolloxError, BolloxErrors};
+use eval::Value;
 pub use scanner::Source;
 
 use crate::{ast::Expr, parser::parser};
 
-pub type BolloxResult = Result<(), BolloxErrors>;
+pub(crate) type Result<T> = std::result::Result<T, BolloxError>;
 
-pub fn run<T>(code: T) -> BolloxResult
+pub fn run<T>(code: T) -> std::result::Result<Value, BolloxErrors>
 where
     T: AsRef<str> + std::fmt::Display,
 {
@@ -51,8 +53,8 @@ where
     let errors = errors.into_inner();
 
     if errors.is_empty() {
-        println!("{result:#?}");
-        Ok(())
+        let value = crate::eval::eval(result.unwrap()).unwrap();
+        Ok(value)
     } else {
         Err(BolloxErrors {
             src: code.to_string(),

@@ -4,8 +4,8 @@ use crate::token::{Range, Span};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Expr<'a> {
-    node: Box<Node<'a>>,
-    span: Span,
+    pub node: Box<Node<'a>>,
+    pub span: Span,
 }
 
 impl<'a> Expr<'a> {
