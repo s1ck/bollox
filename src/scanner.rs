@@ -3,6 +3,7 @@ use std::{iter::Chain, str::CharIndices};
 use crate::{
     error::{BolloxError, ScanError},
     token::{Token, TokenType},
+    Result,
 };
 
 struct PeekPeekIterator<I: Iterator> {
@@ -58,30 +59,12 @@ impl<'a> Source<'a> {
     pub fn new(source: &'a str) -> Self {
         Source { source }
     }
-
-    pub fn scan_all(self) -> Result<Vec<Token>, Vec<BolloxError>> {
-        let mut oks = Vec::new();
-        let mut errs = Vec::new();
-
-        for i in self {
-            match i {
-                Ok(t) => oks.push(t),
-                Err(e) => errs.push(e),
-            }
-        }
-
-        if !errs.is_empty() {
-            Err(errs)
-        } else {
-            Ok(oks)
-        }
-    }
 }
 
 impl<'a> IntoIterator for Source<'a> {
-    type Item = Result<Token, BolloxError>;
+    type Item = Result<Token>;
 
-    type IntoIter = Chain<Scanner<'a>, core::option::IntoIter<Result<Token, BolloxError>>>;
+    type IntoIter = Chain<Scanner<'a>, core::option::IntoIter<Result<Token>>>;
 
     fn into_iter(self) -> Self::IntoIter {
         let line = self.source.lines().count();
@@ -100,7 +83,7 @@ pub struct Scanner<'a> {
 }
 
 impl<'a> Iterator for Scanner<'a> {
-    type Item = Result<Token, BolloxError>;
+    type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -128,7 +111,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn scan_token(&mut self) -> Option<Result<Token, ScanError>> {
+    fn scan_token(&mut self) -> Option<Result<Token>> {
         let token_type = match self.advance() {
             '(' => TokenType::LeftParen,
             ')' => TokenType::RightParen,
@@ -209,7 +192,7 @@ impl<'a> Scanner<'a> {
         TokenType::from(&self.source.source[self.start..self.current])
     }
 
-    fn string(&mut self) -> Result<Token, ScanError> {
+    fn string(&mut self) -> Result<Token> {
         while self.peek() != '"' && !self.is_at_end() {
             if self.peek() == '\n' {
                 self.line += 1;
@@ -231,7 +214,7 @@ impl<'a> Scanner<'a> {
         Ok(Token::new(TokenType::String, self.line, offset, len))
     }
 
-    fn number(&mut self) -> Result<Token, ScanError> {
+    fn number(&mut self) -> Result<Token> {
         while self.peek().is_ascii_digit() {
             self.advance();
         }
@@ -306,7 +289,13 @@ mod tests {
     fn test_left_paren() {
         let input = "(";
         let source = Source::new(input);
-        let tokens = source.scan_all().unwrap();
+        let tokens = source
+            .into_iter()
+            .filter_map(|r| match r {
+                Ok(t) => Some(t),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
         let expected_token = Token::new(TokenType::LeftParen, 1, 0, 1);
         assert_eq!(tokens, vec![expected_token, eof(input)]);
     }

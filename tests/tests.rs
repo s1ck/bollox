@@ -3,12 +3,17 @@ use bollox::{token::Token, Source};
 
 fn run(source: &str, expected: Vec<Token>) {
     let source = Source::new(source);
-    let actual = source.scan_all().unwrap();
+    let (actual, errors) = source
+        .into_iter()
+        .fold((vec![], vec![]), |(mut oks, mut errs), tok| {
+            match tok {
+                Ok(t) => oks.push(t),
+                Err(e) => errs.push(e),
+            }
+            (oks, errs)
+        });
 
-    // for (a, e) in actual.iter().zip(expected.iter()) {
-    //     assert_eq!(a, e);
-    // }
-
+    assert!(errors.is_empty());
     assert_eq!(actual, expected);
 }
 

@@ -4,7 +4,7 @@ use crate::{
     ast::{BinaryOp, Expr, Literal, Node, UnaryOp},
     error::{BolloxError, SyntaxError},
     token::{Span, Token, TokenType},
-    Source,
+    Result, Source,
 };
 use TokenType::*;
 
@@ -41,11 +41,11 @@ pub struct Parser<'a, I: Iterator<Item = Tok>> {
 
 impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     // expression → equality ;
-    fn expression(&mut self) -> Result<Expr<'a>, SyntaxError> {
+    fn expression(&mut self) -> Result<Expr<'a>> {
         self.equality()
     }
     // equality   → comparison ( ( "!=" | "==" ) comparison )* ;
-    fn equality(&mut self) -> Result<Expr<'a>, SyntaxError> {
+    fn equality(&mut self) -> Result<Expr<'a>> {
         let mut lhs = self.comparison()?;
         loop {
             let op = match self.tokens.peek() {
@@ -61,7 +61,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         Ok(lhs)
     }
     // comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-    fn comparison(&mut self) -> Result<Expr<'a>, SyntaxError> {
+    fn comparison(&mut self) -> Result<Expr<'a>> {
         let mut lhs = self.term()?;
         loop {
             let op = match self.tokens.peek() {
@@ -79,7 +79,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         Ok(lhs)
     }
     // term       → factor ( ( "-" | "+" ) factor )* ;
-    fn term(&mut self) -> Result<Expr<'a>, SyntaxError> {
+    fn term(&mut self) -> Result<Expr<'a>> {
         let mut lhs = self.factor()?;
         loop {
             let op = match self.tokens.peek() {
@@ -95,7 +95,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         Ok(lhs)
     }
     // factor     → unary ( ( "/" | "*" ) unary )* ;
-    fn factor(&mut self) -> Result<Expr<'a>, SyntaxError> {
+    fn factor(&mut self) -> Result<Expr<'a>> {
         let mut lhs = self.unary()?;
         loop {
             let op = match self.tokens.peek() {
@@ -111,7 +111,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         Ok(lhs)
     }
     // unary      → ( "!" | "-" ) unary | primary ;
-    fn unary(&mut self) -> Result<Expr<'a>, SyntaxError> {
+    fn unary(&mut self) -> Result<Expr<'a>> {
         let (op, span) = match self.tokens.peek() {
             Some(&(Bang, span)) => (UnaryOp::Not, span),
             Some(&(Minus, span)) => (UnaryOp::Neg, span),
@@ -123,7 +123,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         Ok(Node::unary(op, inner).into_expr(range))
     }
     // primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
-    fn primary(&mut self) -> Result<Expr<'a>, SyntaxError> {
+    fn primary(&mut self) -> Result<Expr<'a>> {
         let (node, span): (Node<Expr<'a>>, _) = match self.tokens.next() {
             Some((False, span)) => (Node::fals(), span),
             Some((True, span)) => (Node::tru(), span),
@@ -160,7 +160,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
 }
 
 impl<'a, I: Iterator<Item = Tok>> Iterator for Parser<'a, I> {
-    type Item = Result<Expr<'a>, BolloxError>;
+    type Item = Result<Expr<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let _ = self.tokens.peek()?; // check for EOI
@@ -173,10 +173,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_simple_parser() -> Result<(), SyntaxError> {
+    fn test_simple_parser() -> Result<()> {
         let source = "4 + 2";
         let source = Source::new(source);
-        let tokens = source.scan_all().unwrap();
+        let tokens = source
+            .into_iter()
+            .filter_map(|r| match r {
+                Ok(t) => Some(t),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
         let parser = parser(source, tokens);
         let expres = parser
             .filter_map(|e| match e {

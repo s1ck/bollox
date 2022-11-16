@@ -2,7 +2,7 @@ use std::{cmp::Ordering, fmt::Display, rc::Rc};
 
 use crate::{
     ast::{BinaryOp, Expr, Literal, Node, UnaryOp},
-    error::BolloxError,
+    Result,
 };
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -37,7 +37,7 @@ impl Display for Value {
     }
 }
 
-pub fn eval(expr: Expr<'_>) -> Result<Value, BolloxError> {
+pub fn eval(expr: Expr<'_>) -> Result<Value> {
     let value = match *expr.node {
         Node::Literal { lit } => Value::from(lit),
         Node::Group { expr } => eval(expr)?,
