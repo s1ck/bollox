@@ -40,7 +40,7 @@ where
     });
 
     // parse
-    let result = parser(source, tokens)
+    let ast = parser(source, tokens)
         .filter_map(|e| match e {
             Ok(e) => Some(e),
             Err(e) => {
@@ -50,11 +50,22 @@ where
         })
         .collect::<Option<Expr>>();
 
+    // eval
+    let value = ast
+        .map(crate::eval::eval)
+        .map(|v| match v {
+            Ok(v) => Some(v),
+            Err(e) => {
+                store_err(e);
+                None
+            }
+        })
+        .unwrap_or_default();
+
     let errors = errors.into_inner();
 
     if errors.is_empty() {
-        let value = crate::eval::eval(result.unwrap()).unwrap();
-        Ok(value)
+        Ok(value.unwrap())
     } else {
         Err(BolloxErrors {
             src: code.to_string(),

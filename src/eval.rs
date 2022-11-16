@@ -44,24 +44,24 @@ pub fn eval(expr: Expr<'_>) -> Result<Value> {
         Node::Unary { op, expr } => {
             let expr = eval(expr)?;
             match op {
-                UnaryOp::Neg => expr.neg(),
-                UnaryOp::Not => expr.not(),
+                UnaryOp::Neg => expr.neg()?,
+                UnaryOp::Not => expr.not()?,
             }
         }
         Node::Binary { lhs, op, rhs } => {
             let lhs = eval(lhs)?;
             let rhs = eval(rhs)?;
             match op {
-                BinaryOp::Equals => lhs.eq(&rhs),
-                BinaryOp::NotEquals => lhs.neq(&rhs),
-                BinaryOp::LessThan => lhs.lt(&rhs),
-                BinaryOp::LessThanOrEqual => lhs.lte(&rhs),
-                BinaryOp::GreaterThan => lhs.gt(&rhs),
-                BinaryOp::GreaterThanOrEqual => lhs.gte(&rhs),
-                BinaryOp::Add => lhs.add(&rhs),
-                BinaryOp::Sub => lhs.sub(&rhs),
-                BinaryOp::Mul => lhs.mul(&rhs),
-                BinaryOp::Div => lhs.div(&rhs),
+                BinaryOp::Equals => lhs.eq(&rhs)?,
+                BinaryOp::NotEquals => lhs.neq(&rhs)?,
+                BinaryOp::LessThan => lhs.lt(&rhs)?,
+                BinaryOp::LessThanOrEqual => lhs.lte(&rhs)?,
+                BinaryOp::GreaterThan => lhs.gt(&rhs)?,
+                BinaryOp::GreaterThanOrEqual => lhs.gte(&rhs)?,
+                BinaryOp::Add => lhs.add(&rhs)?,
+                BinaryOp::Sub => lhs.sub(&rhs)?,
+                BinaryOp::Mul => lhs.mul(&rhs)?,
+                BinaryOp::Div => lhs.div(&rhs)?,
             }
         }
     };
@@ -70,97 +70,111 @@ pub fn eval(expr: Expr<'_>) -> Result<Value> {
 }
 
 impl Value {
-    fn as_bool(&self) -> bool {
-        match self {
+    fn as_bool(&self) -> Result<bool> {
+        Ok(match self {
             Value::Boolean(b) => *b,
             Value::Nil => false,
             _ => true,
-        }
+        })
     }
 
-    fn as_num(&self) -> f64 {
-        match self {
+    fn as_num(&self) -> Result<f64> {
+        Ok(match self {
             Value::Number(n) => *n,
             Value::Str(s) => s.parse::<f64>().unwrap(),
             _ => panic!("Expected number literal, got {self:?}"),
-        }
+        })
     }
 
-    fn as_str(&self) -> Rc<str> {
+    fn as_str(&self) -> Result<Rc<str>> {
         let Value::Str(s) = &self else {
             panic!("Expected string literal, got {self:?}");
         };
-        Rc::clone(s)
+        Ok(Rc::clone(s))
     }
 
-    fn not(&self) -> Self {
-        Value::Boolean(!self.as_bool())
+    fn not(&self) -> Result<Self> {
+        let b = self.as_bool()?;
+        Ok((!b).into())
     }
 
-    fn neg(&self) -> Self {
-        Value::Number(-1.0 * self.as_num())
+    fn neg(&self) -> Result<Self> {
+        let n = self.as_num()?;
+        Ok((-1.0 * n).into())
     }
 
-    fn add(&self, rhs: &Self) -> Self {
-        match self {
-            Value::Number(lhs) => Value::Number(lhs + rhs.as_num()),
-            Value::Str(lhs) => Value::Str(Rc::from(format!("{lhs}{}", rhs.as_str()))),
+    fn add(&self, rhs: &Self) -> Result<Self> {
+        Ok(match self {
+            Value::Number(lhs) => {
+                let rhs = rhs.as_num()?;
+                (lhs + rhs).into()
+            }
+            Value::Str(lhs) => {
+                let rhs = rhs.as_str()?;
+                format!("{}{}", lhs, rhs).into()
+            }
             _ => panic!("Expected number or string, got {self:?}"),
-        }
+        })
     }
 
-    fn sub(&self, rhs: &Self) -> Self {
-        Value::Number(self.as_num() - rhs.as_num())
+    fn sub(&self, rhs: &Self) -> Result<Self> {
+        let lhs = self.as_num()?;
+        let rhs = rhs.as_num()?;
+        Ok((lhs - rhs).into())
     }
 
-    fn mul(&self, rhs: &Self) -> Self {
-        Value::Number(self.as_num() * rhs.as_num())
+    fn mul(&self, rhs: &Self) -> Result<Self> {
+        let lhs = self.as_num()?;
+        let rhs = rhs.as_num()?;
+        Ok((lhs * rhs).into())
     }
 
-    fn div(&self, rhs: &Self) -> Self {
-        Value::Number(self.as_num() / rhs.as_num())
+    fn div(&self, rhs: &Self) -> Result<Self> {
+        let lhs = self.as_num()?;
+        let rhs = rhs.as_num()?;
+        Ok((lhs / rhs).into())
     }
 
-    fn eq(&self, rhs: &Self) -> Self {
-        let b = self
+    fn eq(&self, rhs: &Self) -> Result<Self> {
+        Ok(self
             .partial_cmp(rhs)
-            .map_or(false, |ord| ord == Ordering::Equal);
-        Value::Boolean(b)
+            .map_or(false, |ord| ord == Ordering::Equal)
+            .into())
     }
 
-    fn neq(&self, rhs: &Self) -> Self {
-        let b = self
+    fn neq(&self, rhs: &Self) -> Result<Self> {
+        Ok(self
             .partial_cmp(rhs)
-            .map_or(false, |ord| ord != Ordering::Equal);
-        Value::Boolean(b)
+            .map_or(false, |ord| ord != Ordering::Equal)
+            .into())
     }
 
-    fn lt(&self, rhs: &Self) -> Self {
-        let b = self
+    fn lt(&self, rhs: &Self) -> Result<Self> {
+        Ok(self
             .partial_cmp(rhs)
-            .map_or(false, |ord| ord == Ordering::Less);
-        Value::Boolean(b)
+            .map_or(false, |ord| ord == Ordering::Less)
+            .into())
     }
 
-    fn gt(&self, rhs: &Self) -> Self {
-        let b = self
+    fn gt(&self, rhs: &Self) -> Result<Self> {
+        Ok(self
             .partial_cmp(rhs)
-            .map_or(false, |ord| ord == Ordering::Greater);
-        Value::Boolean(b)
+            .map_or(false, |ord| ord == Ordering::Greater)
+            .into())
     }
 
-    fn lte(&self, rhs: &Self) -> Self {
-        let b = self
+    fn lte(&self, rhs: &Self) -> Result<Self> {
+        Ok(self
             .partial_cmp(rhs)
-            .map_or(false, |ord| ord != Ordering::Greater);
-        Value::Boolean(b)
+            .map_or(false, |ord| ord != Ordering::Greater)
+            .into())
     }
 
-    fn gte(&self, rhs: &Self) -> Self {
-        let b = self
+    fn gte(&self, rhs: &Self) -> Result<Self> {
+        Ok(self
             .partial_cmp(rhs)
-            .map_or(false, |ord| ord != Ordering::Less);
-        Value::Boolean(b)
+            .map_or(false, |ord| ord != Ordering::Less)
+            .into())
     }
 
     fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
@@ -171,5 +185,23 @@ impl Value {
             (Value::Nil, Value::Nil) => Some(Ordering::Equal),
             _ => None,
         }
+    }
+}
+
+impl From<bool> for Value {
+    fn from(b: bool) -> Self {
+        Value::Boolean(b)
+    }
+}
+
+impl From<f64> for Value {
+    fn from(n: f64) -> Self {
+        Value::Number(n)
+    }
+}
+
+impl From<String> for Value {
+    fn from(s: String) -> Self {
+        Value::Str(Rc::from(s))
     }
 }

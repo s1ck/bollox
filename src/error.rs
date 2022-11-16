@@ -18,9 +18,14 @@ pub enum BolloxError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     ScanError(#[from] ScanError),
+
     #[error(transparent)]
     #[diagnostic(transparent)]
     SyntaxError(#[from] SyntaxError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    RuntimeError(#[from] RuntimeError),
 }
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -115,3 +120,6 @@ impl SyntaxError {
         Self::UnexpectedEndOfInput(UnexpectedEndOfInput).into()
     }
 }
+
+#[derive(Clone, Debug, Error, Diagnostic)]
+pub enum RuntimeError {}
