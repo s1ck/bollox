@@ -1,7 +1,8 @@
-use std::{cmp::Ordering, fmt::Display, rc::Rc};
+use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use crate::{
     ast::{BinaryOp, Expr, Literal, Node, UnaryOp},
+    error::RuntimeError,
     Result,
 };
 
@@ -11,7 +12,7 @@ pub enum Value {
     Nil,
     Boolean(bool),
     Number(f64),
-    Str(Rc<str>),
+    Str(Arc<str>),
 }
 
 impl From<Literal<'_>> for Value {
@@ -79,18 +80,17 @@ impl Value {
     }
 
     fn as_num(&self) -> Result<f64> {
-        Ok(match self {
-            Value::Number(n) => *n,
-            Value::Str(s) => s.parse::<f64>().unwrap(),
-            _ => panic!("Expected number literal, got {self:?}"),
-        })
+        let Value::Number(n) = self else {
+           return Err(RuntimeError::non_number(self))
+        };
+        Ok(*n)
     }
 
-    fn as_str(&self) -> Result<Rc<str>> {
-        let Value::Str(s) = &self else {
-            panic!("Expected string literal, got {self:?}");
+    fn as_str(&self) -> Result<Arc<str>> {
+        let Value::Str(s) = self else {
+            return Err(RuntimeError::non_str(self))
         };
-        Ok(Rc::clone(s))
+        Ok(Arc::clone(s))
     }
 
     fn not(&self) -> Result<Self> {
@@ -113,7 +113,7 @@ impl Value {
                 let rhs = rhs.as_str()?;
                 format!("{}{}", lhs, rhs).into()
             }
-            _ => panic!("Expected number or string, got {self:?}"),
+            _ => return Err(RuntimeError::incompatible_types(BinaryOp::Add, self, rhs)),
         })
     }
 
@@ -202,6 +202,6 @@ impl From<f64> for Value {
 
 impl From<String> for Value {
     fn from(s: String) -> Self {
-        Value::Str(Rc::from(s))
+        Value::Str(Arc::from(s))
     }
 }

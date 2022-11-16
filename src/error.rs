@@ -1,7 +1,11 @@
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
-use crate::token::{Span, TokenType};
+use crate::{
+    ast::BinaryOp,
+    eval::Value,
+    token::{Span, TokenType},
+};
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 #[error("Errors while running Lox code")]
@@ -122,4 +126,63 @@ impl SyntaxError {
 }
 
 #[derive(Clone, Debug, Error, Diagnostic)]
-pub enum RuntimeError {}
+pub enum RuntimeError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    NonNumber(NonNumber),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    NonStr(NonStr),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    IncompatibleTypes(IncompatibleTypes),
+}
+
+#[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Expected number literal, got {:?}.", found)]
+#[diagnostic()]
+pub struct NonNumber {
+    found: Value,
+    // #[label("{}", self)]
+    // span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Expected string literal, got {:?}.", found)]
+#[diagnostic()]
+pub struct NonStr {
+    found: Value,
+    // #[label("{}", self)]
+    // span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Incompatible types for op `{}`, got {:?} and {:?} .", op, lhs, rhs)]
+#[diagnostic()]
+pub struct IncompatibleTypes {
+    lhs: Value,
+    rhs: Value,
+    op: BinaryOp,
+    // #[label("{}", self)]
+    // span: SourceSpan,
+}
+
+impl RuntimeError {
+    pub fn non_number(found: &Value) -> BolloxError {
+        let found = found.clone();
+        Self::NonNumber(NonNumber { found }).into()
+    }
+
+    pub fn non_str(found: &Value) -> BolloxError {
+        let found = found.clone();
+        Self::NonStr(NonStr { found }).into()
+    }
+
+    pub fn incompatible_types(op: BinaryOp, lhs: &Value, rhs: &Value) -> BolloxError {
+        let lhs = lhs.clone();
+        let rhs = rhs.clone();
+        Self::IncompatibleTypes(IncompatibleTypes { lhs, rhs, op }).into()
+    }
+}
