@@ -145,8 +145,8 @@ pub enum RuntimeError {
 #[diagnostic()]
 pub struct NonNumber {
     found: Value,
-    // #[label("{}", self)]
-    // span: SourceSpan,
+    #[label("{}", self)]
+    span: SourceSpan,
 }
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -154,8 +154,8 @@ pub struct NonNumber {
 #[diagnostic()]
 pub struct NonStr {
     found: Value,
-    // #[label("{}", self)]
-    // span: SourceSpan,
+    #[label("{}", self)]
+    span: SourceSpan,
 }
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -165,24 +165,38 @@ pub struct IncompatibleTypes {
     lhs: Value,
     rhs: Value,
     op: BinaryOp,
-    // #[label("{}", self)]
-    // span: SourceSpan,
+    #[label("{}", self)]
+    span: SourceSpan,
 }
 
 impl RuntimeError {
-    pub fn non_number(found: &Value) -> BolloxError {
+    pub fn non_number(found: &Value, span: Span) -> BolloxError {
         let found = found.clone();
-        Self::NonNumber(NonNumber { found }).into()
+        Self::NonNumber(NonNumber {
+            found,
+            span: span.into(),
+        })
+        .into()
     }
 
-    pub fn non_str(found: &Value) -> BolloxError {
+    pub fn non_str(found: &Value, span: Span) -> BolloxError {
         let found = found.clone();
-        Self::NonStr(NonStr { found }).into()
+        Self::NonStr(NonStr {
+            found,
+            span: span.into(),
+        })
+        .into()
     }
 
-    pub fn incompatible_types(op: BinaryOp, lhs: &Value, rhs: &Value) -> BolloxError {
+    pub fn incompatible_types(op: BinaryOp, lhs: &Value, rhs: &Value, span: Span) -> BolloxError {
         let lhs = lhs.clone();
         let rhs = rhs.clone();
-        Self::IncompatibleTypes(IncompatibleTypes { lhs, rhs, op }).into()
+        Self::IncompatibleTypes(IncompatibleTypes {
+            lhs,
+            rhs,
+            op,
+            span: span.into(),
+        })
+        .into()
     }
 }

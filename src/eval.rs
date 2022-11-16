@@ -3,6 +3,7 @@ use std::{cmp::Ordering, fmt::Display, sync::Arc};
 use crate::{
     ast::{BinaryOp, Expr, Literal, Node, UnaryOp},
     error::RuntimeError,
+    token::Span,
     Result,
 };
 
@@ -39,30 +40,30 @@ impl Display for Value {
 }
 
 pub fn eval(expr: Expr<'_>) -> Result<Value> {
-    let value = match *expr.node {
-        Node::Literal { lit } => Value::from(lit),
-        Node::Group { expr } => eval(expr)?,
-        Node::Unary { op, expr } => {
-            let expr = eval(expr)?;
+    let value = match (*expr.node, expr.span) {
+        (Node::Literal { lit }, _) => Value::from(lit),
+        (Node::Group { expr }, _) => eval(expr)?,
+        (Node::Unary { op, expr }, span) => {
+            let val = eval(expr)?;
             match op {
-                UnaryOp::Neg => expr.neg()?,
-                UnaryOp::Not => expr.not()?,
+                UnaryOp::Neg => val.neg(span)?,
+                UnaryOp::Not => val.not(span)?,
             }
         }
-        Node::Binary { lhs, op, rhs } => {
-            let lhs = eval(lhs)?;
-            let rhs = eval(rhs)?;
+        (Node::Binary { lhs, op, rhs }, span) => {
+            let lhs_val = eval(lhs)?;
+            let rhs_val = eval(rhs)?;
             match op {
-                BinaryOp::Equals => lhs.eq(&rhs)?,
-                BinaryOp::NotEquals => lhs.neq(&rhs)?,
-                BinaryOp::LessThan => lhs.lt(&rhs)?,
-                BinaryOp::LessThanOrEqual => lhs.lte(&rhs)?,
-                BinaryOp::GreaterThan => lhs.gt(&rhs)?,
-                BinaryOp::GreaterThanOrEqual => lhs.gte(&rhs)?,
-                BinaryOp::Add => lhs.add(&rhs)?,
-                BinaryOp::Sub => lhs.sub(&rhs)?,
-                BinaryOp::Mul => lhs.mul(&rhs)?,
-                BinaryOp::Div => lhs.div(&rhs)?,
+                BinaryOp::Equals => lhs_val.eq(&rhs_val)?,
+                BinaryOp::NotEquals => lhs_val.neq(&rhs_val)?,
+                BinaryOp::LessThan => lhs_val.lt(&rhs_val)?,
+                BinaryOp::LessThanOrEqual => lhs_val.lte(&rhs_val)?,
+                BinaryOp::GreaterThan => lhs_val.gt(&rhs_val)?,
+                BinaryOp::GreaterThanOrEqual => lhs_val.gte(&rhs_val)?,
+                BinaryOp::Add => lhs_val.add(&rhs_val, span)?,
+                BinaryOp::Sub => lhs_val.sub(&rhs_val, span)?,
+                BinaryOp::Mul => lhs_val.mul(&rhs_val, span)?,
+                BinaryOp::Div => lhs_val.div(&rhs_val, span)?,
             }
         }
     };
@@ -71,7 +72,7 @@ pub fn eval(expr: Expr<'_>) -> Result<Value> {
 }
 
 impl Value {
-    fn as_bool(&self) -> Result<bool> {
+    fn as_bool(&self, _span: Span) -> Result<bool> {
         Ok(match self {
             Value::Boolean(b) => *b,
             Value::Nil => false,
@@ -79,59 +80,66 @@ impl Value {
         })
     }
 
-    fn as_num(&self) -> Result<f64> {
+    fn as_num(&self, span: Span) -> Result<f64> {
         let Value::Number(n) = self else {
-           return Err(RuntimeError::non_number(self))
+           return Err(RuntimeError::non_number(self, span))
         };
         Ok(*n)
     }
 
-    fn as_str(&self) -> Result<Arc<str>> {
+    fn as_str(&self, span: Span) -> Result<Arc<str>> {
         let Value::Str(s) = self else {
-            return Err(RuntimeError::non_str(self))
+            return Err(RuntimeError::non_str(self, span))
         };
         Ok(Arc::clone(s))
     }
 
-    fn not(&self) -> Result<Self> {
-        let b = self.as_bool()?;
+    fn not(&self, span: Span) -> Result<Self> {
+        let b = self.as_bool(span)?;
         Ok((!b).into())
     }
 
-    fn neg(&self) -> Result<Self> {
-        let n = self.as_num()?;
+    fn neg(&self, span: Span) -> Result<Self> {
+        let n = self.as_num(span)?;
         Ok((-1.0 * n).into())
     }
 
-    fn add(&self, rhs: &Self) -> Result<Self> {
+    fn add(&self, rhs: &Self, span: Span) -> Result<Self> {
         Ok(match self {
             Value::Number(lhs) => {
-                let rhs = rhs.as_num()?;
+                let rhs = rhs.as_num(span)?;
                 (lhs + rhs).into()
             }
             Value::Str(lhs) => {
-                let rhs = rhs.as_str()?;
+                let rhs = rhs.as_str(span)?;
                 format!("{}{}", lhs, rhs).into()
             }
-            _ => return Err(RuntimeError::incompatible_types(BinaryOp::Add, self, rhs)),
+            _ => {
+                return Err(RuntimeError::incompatible_types(
+                    BinaryOp::Add,
+                    self,
+                    rhs,
+                    span,
+                ))
+            }
         })
     }
 
-    fn sub(&self, rhs: &Self) -> Result<Self> {
-        let lhs = self.as_num()?;
-        let rhs = rhs.as_num()?;
+    fn sub(&self, rhs: &Self, span: Span) -> Result<Self> {
+        let lhs = self.as_num(span)?;
+        let rhs = rhs.as_num(span)?;
         Ok((lhs - rhs).into())
     }
 
-    fn mul(&self, rhs: &Self) -> Result<Self> {
-        let lhs = self.as_num()?;
-        let rhs = rhs.as_num()?;
+    fn mul(&self, rhs: &Self, span: Span) -> Result<Self> {
+        let lhs = self.as_num(span)?;
+        let rhs = rhs.as_num(span)?;
         Ok((lhs * rhs).into())
     }
 
-    fn div(&self, rhs: &Self) -> Result<Self> {
-        let lhs = self.as_num()?;
-        let rhs = rhs.as_num()?;
+    fn div(&self, rhs: &Self, span: Span) -> Result<Self> {
+        let lhs = self.as_num(span)?;
+        let rhs = rhs.as_num(span)?;
         Ok((lhs / rhs).into())
     }
 
