@@ -4,6 +4,7 @@ use crate::token::{Range, Span};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt<'a> {
+    Block(Vec<Stmt<'a>>),
     Expression(Expr<'a>),
     Print(Expr<'a>),
     Var(&'a str, Option<Expr<'a>>),

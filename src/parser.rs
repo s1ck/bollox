@@ -79,10 +79,11 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             )),
         }
     }
-    // statement -> expr_stmt | print_stmt ;
+    // statement -> expr_stmt | print_stmt | block_stmt ;
     fn statement(&mut self) -> Result<Stmt<'a>> {
         match self.tokens.peek() {
             Some(&(Print, _)) => self.print_stmt(),
+            Some(&(LeftBrace, _)) => self.block_stmt(),
             _ => self.expr_stmt(),
         }
     }
@@ -101,6 +102,24 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         match self.tokens.next() {
             Some((Semicolon, _)) => Ok(Stmt::Print(expr)),
             _ => Err(SyntaxError::missing_semicolon(expr.span)),
+        }
+    }
+    // block_stmt -> "{" declaration* "}"
+    fn block_stmt(&mut self) -> Result<Stmt<'a>> {
+        let _ = self.tokens.next(); // consume { token
+        let mut stmts = Vec::new();
+
+        loop {
+            match self.tokens.peek() {
+                Some(&(Eof, _)) | Some(&(RightBrace, _)) => break,
+                _ => stmts.push(self.declaration()?),
+            }
+        }
+
+        match self.tokens.next() {
+            Some((RightBrace, _)) => Ok(Stmt::Block(stmts)),
+            // TODO pick proper span
+            _ => Err(SyntaxError::missing_closing_parenthesis((0..1).into())),
         }
     }
 

@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt::Display, sync::Arc};
+use std::{cell::RefCell, cmp::Ordering, fmt::Display, rc::Rc, sync::Arc};
 
 use crate::{
     ast::{BinaryOp, Expr, Literal, Node, Stmt, UnaryOp},
@@ -48,14 +48,14 @@ where
 }
 
 pub struct Interpreter<'a, I: Iterator<Item = Stmt<'a>>> {
-    env: Environment<'a>,
+    env: Rc<RefCell<Environment<'a>>>,
     statements: I,
 }
 
 impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
     fn new(statements: I) -> Self {
         Self {
-            env: Environment::new(),
+            env: Rc::new(RefCell::new(Environment::new())),
             statements,
         }
     }
@@ -64,47 +64,71 @@ impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
 impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
     fn eval_stmt(&mut self, stmt: Stmt<'a>) -> Result<()> {
         match stmt {
-            Stmt::Expression(expr) => self.eval(expr).map(|_| Ok(()))?,
-            Stmt::Print(expr) => self.eval(expr).map(|v| {
+            Stmt::Block(stmts) => {
+                let enc_env = self.env.clone();
+                let new_env = Environment::with_enclosing(enc_env);
+                self.eval_block(stmts, Rc::new(RefCell::new(new_env)))
+            }
+            Stmt::Expression(expr) => self.eval_expr(expr).map(|_| Ok(()))?,
+            Stmt::Print(expr) => self.eval_expr(expr).map(|v| {
                 println!("{v}");
                 Ok(())
             })?,
             Stmt::Var(name, initializer) => {
                 let value = match initializer {
-                    Some(expr) => self.eval(expr)?,
+                    Some(expr) => self.eval_expr(expr)?,
                     None => Value::Nil,
                 };
-                self.env.define(name, value);
+                self.env.borrow_mut().define(name, value);
                 Ok(())
             }
         }
     }
 
-    fn eval(&mut self, expr: Expr<'a>) -> Result<Value> {
+    fn eval_block(
+        &mut self,
+        stmts: Vec<Stmt<'a>>,
+        env: Rc<RefCell<Environment<'a>>>,
+    ) -> Result<()> {
+        let prev = std::mem::replace(&mut self.env, env);
+        // simulate try-catch
+        let res = || -> Result<()> {
+            for stmt in stmts {
+                self.eval_stmt(stmt)?;
+            }
+            Ok(())
+        };
+        let res = res();
+        // finally
+        self.env = prev;
+        res
+    }
+
+    fn eval_expr(&mut self, expr: Expr<'a>) -> Result<Value> {
         let value = match (*expr.node, expr.span) {
-            (Node::Variable { name }, span) => match self.env.get(name) {
-                Some(value) => value.clone(),
+            (Node::Variable { name }, span) => match self.env.borrow().get(name) {
+                Some(value) => value,
                 None => return Err(SyntaxError::undefined_variable(name, span)),
             },
             (Node::Assign { name, expr }, span) => {
-                let value = self.eval(expr)?;
-                match self.env.assign(name, value.clone()) {
+                let value = self.eval_expr(expr)?;
+                match self.env.borrow_mut().assign(name, value.clone()) {
                     Some(_) => value,
                     None => return Err(SyntaxError::undefined_variable(name, span)),
                 }
             }
             (Node::Literal { lit }, _) => Value::from(lit),
-            (Node::Group { expr }, _) => self.eval(expr)?,
+            (Node::Group { expr }, _) => self.eval_expr(expr)?,
             (Node::Unary { op, expr }, span) => {
-                let val = self.eval(expr)?;
+                let val = self.eval_expr(expr)?;
                 match op {
                     UnaryOp::Neg => val.neg(span)?,
                     UnaryOp::Not => val.not(span)?,
                 }
             }
             (Node::Binary { lhs, op, rhs }, span) => {
-                let lhs_val = self.eval(lhs)?;
-                let rhs_val = self.eval(rhs)?;
+                let lhs_val = self.eval_expr(lhs)?;
+                let rhs_val = self.eval_expr(rhs)?;
                 match op {
                     BinaryOp::Equals => lhs_val.eq(&rhs_val)?,
                     BinaryOp::NotEquals => lhs_val.neq(&rhs_val)?,
