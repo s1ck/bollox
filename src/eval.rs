@@ -2,7 +2,8 @@ use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use crate::{
     ast::{BinaryOp, Expr, Literal, Node, Stmt, UnaryOp},
-    error::RuntimeError,
+    env::Environment,
+    error::{RuntimeError, SyntaxError},
     token::Span,
     Result,
 };
@@ -39,46 +40,93 @@ impl Display for Value {
     }
 }
 
-pub fn eval_stmt(stmt: Stmt<'_>) -> Result<()> {
-    match stmt {
-        Stmt::Expression(expr) => eval(expr).map(|_| Ok(()))?,
-        Stmt::Print(expr) => eval(expr).map(|v| {
-            println!("{v}");
-            Ok(())
-        })?,
+pub fn interpreter<'a, I>(statements: I) -> Interpreter<'a, I::IntoIter>
+where
+    I: IntoIterator<Item = Stmt<'a>>,
+{
+    Interpreter::new(statements.into_iter())
+}
+
+pub struct Interpreter<'a, I: Iterator<Item = Stmt<'a>>> {
+    environment: Environment<'a>,
+    statements: I,
+}
+
+impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
+    fn new(statements: I) -> Self {
+        Self {
+            environment: Environment::new(),
+            statements,
+        }
     }
 }
 
-pub fn eval(expr: Expr<'_>) -> Result<Value> {
-    let value = match (*expr.node, expr.span) {
-        (Node::Literal { lit }, _) => Value::from(lit),
-        (Node::Group { expr }, _) => eval(expr)?,
-        (Node::Unary { op, expr }, span) => {
-            let val = eval(expr)?;
-            match op {
-                UnaryOp::Neg => val.neg(span)?,
-                UnaryOp::Not => val.not(span)?,
+impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
+    fn eval_stmt(&mut self, stmt: Stmt<'a>) -> Result<()> {
+        match stmt {
+            Stmt::Expression(expr) => self.eval(expr).map(|_| Ok(()))?,
+            Stmt::Print(expr) => self.eval(expr).map(|v| {
+                println!("{v}");
+                Ok(())
+            })?,
+            Stmt::Var(name, initializer) => {
+                let value = match initializer {
+                    Some(expr) => self.eval(expr)?,
+                    None => Value::Nil,
+                };
+                self.environment.define(name, value);
+                Ok(())
             }
         }
-        (Node::Binary { lhs, op, rhs }, span) => {
-            let lhs_val = eval(lhs)?;
-            let rhs_val = eval(rhs)?;
-            match op {
-                BinaryOp::Equals => lhs_val.eq(&rhs_val)?,
-                BinaryOp::NotEquals => lhs_val.neq(&rhs_val)?,
-                BinaryOp::LessThan => lhs_val.lt(&rhs_val)?,
-                BinaryOp::LessThanOrEqual => lhs_val.lte(&rhs_val)?,
-                BinaryOp::GreaterThan => lhs_val.gt(&rhs_val)?,
-                BinaryOp::GreaterThanOrEqual => lhs_val.gte(&rhs_val)?,
-                BinaryOp::Add => lhs_val.add(&rhs_val, span)?,
-                BinaryOp::Sub => lhs_val.sub(&rhs_val, span)?,
-                BinaryOp::Mul => lhs_val.mul(&rhs_val, span)?,
-                BinaryOp::Div => lhs_val.div(&rhs_val, span)?,
-            }
-        }
-    };
+    }
 
-    Ok(value)
+    fn eval(&mut self, expr: Expr<'_>) -> Result<Value> {
+        let value = match (*expr.node, expr.span) {
+            (Node::Var { name }, span) => match self.environment.get(name) {
+                Some(value) => value.clone(),
+                None => return Err(SyntaxError::undefined_variable(name, span)),
+            },
+            (Node::Assign { name, expr }, span) => todo!(),
+            (Node::Literal { lit }, _) => Value::from(lit),
+            (Node::Group { expr }, _) => self.eval(expr)?,
+            (Node::Unary { op, expr }, span) => {
+                let val = self.eval(expr)?;
+                match op {
+                    UnaryOp::Neg => val.neg(span)?,
+                    UnaryOp::Not => val.not(span)?,
+                }
+            }
+            (Node::Binary { lhs, op, rhs }, span) => {
+                let lhs_val = self.eval(lhs)?;
+                let rhs_val = self.eval(rhs)?;
+                match op {
+                    BinaryOp::Equals => lhs_val.eq(&rhs_val)?,
+                    BinaryOp::NotEquals => lhs_val.neq(&rhs_val)?,
+                    BinaryOp::LessThan => lhs_val.lt(&rhs_val)?,
+                    BinaryOp::LessThanOrEqual => lhs_val.lte(&rhs_val)?,
+                    BinaryOp::GreaterThan => lhs_val.gt(&rhs_val)?,
+                    BinaryOp::GreaterThanOrEqual => lhs_val.gte(&rhs_val)?,
+                    BinaryOp::Add => lhs_val.add(&rhs_val, span)?,
+                    BinaryOp::Sub => lhs_val.sub(&rhs_val, span)?,
+                    BinaryOp::Mul => lhs_val.mul(&rhs_val, span)?,
+                    BinaryOp::Div => lhs_val.div(&rhs_val, span)?,
+                }
+            }
+        };
+
+        Ok(value)
+    }
+}
+
+impl<'a, I: Iterator<Item = Stmt<'a>>> Iterator for Interpreter<'a, I> {
+    type Item = Result<()>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.statements
+            .next()
+            .map(|stmt| self.eval_stmt(stmt))
+            .or(None)
+    }
 }
 
 impl Value {

@@ -6,6 +6,7 @@ use crate::token::{Range, Span};
 pub enum Stmt<'a> {
     Expression(Expr<'a>),
     Print(Expr<'a>),
+    Var(&'a str, Option<Expr<'a>>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -36,6 +37,8 @@ pub enum Node<'a, T: Sized = Expr<'a>> {
     Binary { lhs: T, op: BinaryOp, rhs: T },
     Group { expr: T },
     Literal { lit: Literal<'a> },
+    Var { name: &'a str },
+    Assign { name: &'a str, expr: T },
 }
 
 impl<'a> Node<'a> {
@@ -62,6 +65,10 @@ impl<'a, T: Sized> Node<'a, T> {
 
     pub fn literal(lit: Literal<'a>) -> Self {
         Self::Literal { lit }
+    }
+
+    pub fn variable(name: &'a str) -> Self {
+        Self::Var { name }
     }
 
     pub fn string(s: &'a str) -> Self {
@@ -306,6 +313,8 @@ fn print(expr: Expr, source: &str) -> String {
             Node::Binary { lhs, op, rhs } => parenthesize(source, op, [lhs, rhs], res),
             Node::Group { expr } => parenthesize(source, "group", Some(expr), res),
             Node::Literal { lit: _ } => res.push_str(&source[Range::from(expr.span)]),
+            Node::Var { name } => res.push_str(&source[Range::from(expr.span)]),
+            Node::Assign { name, expr } => parenthesize(source, "=", Some(expr), res),
         }
     }
 
@@ -333,30 +342,6 @@ fn print(expr: Expr, source: &str) -> String {
     res
 }
 
-// Challenge 5.3: Reverse Polish Notation
-#[cfg(test)]
-fn print_rpn(expr: Expr, source: &str) -> String {
-    fn visit(expr: Expr, source: &str, res: &mut Vec<String>) {
-        match *expr.node {
-            Node::Unary { op, expr } => {
-                res.push(op.to_string());
-                visit(expr, source, res);
-            }
-            Node::Binary { lhs, op, rhs } => {
-                visit(lhs, source, res);
-                visit(rhs, source, res);
-                res.push(op.to_string());
-            }
-            Node::Group { expr } => visit(expr, source, res),
-            Node::Literal { lit: _ } => res.push((&source[Range::from(expr.span)]).to_string()),
-        }
-    }
-
-    let mut res = Vec::new();
-    visit(expr, source, &mut res);
-    res.join(" ")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -372,24 +357,5 @@ mod tests {
         let ast = Node::mul(neg, grp).into_expr(0..14);
 
         assert_eq!(print(ast, input), "(* (- 123) (group 45.67))");
-    }
-
-    #[test]
-    fn test_print_rpn() {
-        let input = "(1 + 2) * (4 - 3)";
-
-        let num1 = Node::number(1_f64).into_expr(1..2);
-        let num2 = Node::number(2_f64).into_expr(5..6);
-        let add = Node::add(num1, num2).into_expr(1..6);
-        let grp0 = Node::group(add).into_expr(0..7);
-
-        let num1 = Node::number(4_f64).into_expr(11..12);
-        let num2 = Node::number(3_f64).into_expr(15..16);
-        let sub = Node::sub(num1, num2).into_expr(11..16);
-        let grp1 = Node::group(sub).into_expr(10..17);
-
-        let ast = Node::mul(grp0, grp1).into_expr(0..17);
-
-        assert_eq!(print_rpn(ast, input), "1 2 + 4 3 - *");
     }
 }

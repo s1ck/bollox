@@ -1,16 +1,18 @@
 #![allow(dead_code)]
 
-pub mod ast;
+mod ast;
+mod env;
 pub mod error;
-pub mod eval;
-pub mod parser;
-pub mod scanner;
+mod eval;
+mod parser;
+mod scanner;
 pub mod token;
 
 use std::cell::Cell;
 
 use error::{BolloxError, BolloxErrors};
 
+use eval::interpreter;
 pub use scanner::Source;
 
 use crate::parser::parser;
@@ -40,19 +42,19 @@ where
     });
 
     // parse (tokens -> statements)
-    parser(source, tokens)
-        .filter_map(|stmt| match stmt {
-            Ok(e) => Some(e),
-            Err(e) => {
-                store_err(e);
-                None
-            }
-        })
-        // evaluate (statements)
-        .for_each(|stmt| match crate::eval::eval_stmt(stmt) {
-            Ok(_) => {}
-            Err(e) => store_err(e),
-        });
+    let statements = parser(source, tokens).filter_map(|stmt| match stmt {
+        Ok(e) => Some(e),
+        Err(e) => {
+            store_err(e);
+            None
+        }
+    });
+
+    // evaluate (statements)
+    interpreter(statements).for_each(|res| match res {
+        Ok(_) => {}
+        Err(e) => store_err(e),
+    });
 
     let errors = errors.into_inner();
 

@@ -40,14 +40,62 @@ pub struct Parser<'a, I: Iterator<Item = Tok>> {
 }
 
 impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
-    fn statement(&mut self) -> Result<Stmt<'a>> {
-        match self.tokens.peek() {
-            Some(&(Print, _)) => self.print_expression(),
-            _ => self.expression_stmt(),
+    // program     -> declaration* EOF ;
+    // declaration -> var_decl | statement ;
+    fn declaration(&mut self) -> Result<Stmt<'a>> {
+        let res = match self.tokens.peek() {
+            Some(&(Var, _)) => self.var_decl(),
+            _ => self.statement(),
+        };
+
+        match res {
+            Ok(stmt) => Ok(stmt),
+            Err(e) => {
+                self.synchronize();
+                Err(e)
+            }
         }
     }
-
-    fn print_expression(&mut self) -> Result<Stmt<'a>> {
+    // var_decl -> "var" IDENTIFER ( "=" expression )? ";" ;
+    fn var_decl(&mut self) -> Result<Stmt<'a>> {
+        let (_, var_span) = self.tokens.next().unwrap(); // consume VAR token
+        let (name, name_span) = match self.tokens.next() {
+            Some((Identifier, span)) => (&self.source.source[Range::<usize>::from(span)], span),
+            _ => return Err(SyntaxError::missing_variable_name(var_span)),
+        };
+        let initializer = match self.tokens.peek() {
+            Some(&(Equal, _)) => {
+                let _ = self.tokens.next(); // consume EQUAL
+                Some(self.expression()?)
+            }
+            _ => None,
+        };
+        match self.tokens.next() {
+            Some((Semicolon, _)) => Ok(Stmt::Var(name, initializer)),
+            _ => Err(SyntaxError::missing_semicolon(
+                initializer
+                    .map(|e| e.span)
+                    .unwrap_or_else(|| name_span.shrink_to_end()),
+            )),
+        }
+    }
+    // statement -> expr_stmt | print_stmt ;
+    fn statement(&mut self) -> Result<Stmt<'a>> {
+        match self.tokens.peek() {
+            Some(&(Print, _)) => self.print_stmt(),
+            _ => self.expr_stmt(),
+        }
+    }
+    // expr_stmt -> expression ";" ;
+    fn expr_stmt(&mut self) -> Result<Stmt<'a>> {
+        let expr = self.expression()?;
+        match self.tokens.next() {
+            Some((Semicolon, _)) => Ok(Stmt::Expression(expr)),
+            _ => Err(SyntaxError::missing_semicolon(expr.span)),
+        }
+    }
+    // print_stmt -> "print" expression ";" ;
+    fn print_stmt(&mut self) -> Result<Stmt<'a>> {
         let _ = self.tokens.next(); // consume PRINT token
         let expr = self.expression()?;
         match self.tokens.next() {
@@ -56,17 +104,13 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         }
     }
 
-    fn expression_stmt(&mut self) -> Result<Stmt<'a>> {
-        let expr = self.expression()?;
-        match self.tokens.next() {
-            Some((Semicolon, _)) => Ok(Stmt::Expression(expr)),
-            _ => Err(SyntaxError::missing_semicolon(expr.span)),
-        }
-    }
-
-    // expression → equality ;
+    // expression → assignment ;
     fn expression(&mut self) -> Result<Expr<'a>> {
-        self.equality()
+        self.assignment()
+    }
+    // assignment -> IDENTIFIER "=" assignment | equality ;
+    fn assignment(&mut self) -> Result<Expr<'a>> {
+        todo!()
     }
     // equality   → comparison ( ( "!=" | "==" ) comparison )* ;
     fn equality(&mut self) -> Result<Expr<'a>> {
@@ -146,7 +190,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         let range = span.union(inner.span());
         Ok(Node::unary(op, inner).into_expr(range))
     }
-    // primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+    // primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
     fn primary(&mut self) -> Result<Expr<'a>> {
         let (node, span): (Node<Expr<'a>>, _) = match self.tokens.next() {
             Some((False, span)) => (Node::fals(), span),
@@ -175,11 +219,34 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
                     _ => return Err(SyntaxError::missing_closing_parenthesis(span.into())),
                 }
             }
+            Some((Identifier, span)) => {
+                let value = &self.source.source[Range::<usize>::from(span)];
+                (Node::variable(value), span)
+            }
+
             Some((token, span)) => return Err(SyntaxError::unsupported_token_type(token, span)),
             None => return Err(SyntaxError::unexpected_eoi()),
         };
 
         Ok(node.into_expr(span.into()))
+    }
+}
+
+impl<I: Iterator<Item = Tok>> Parser<'_, I> {
+    fn synchronize(&mut self) {
+        while let Some((tt, _)) = self.tokens.peek() {
+            match *tt {
+                Semicolon => {
+                    let _ = self.tokens.next();
+                    break;
+                }
+                Class | Fun | For | If | Print | Return | Var | While => break,
+                _ => {
+                    // skip any other token in order to synchronize
+                    let _ = self.tokens.next();
+                }
+            }
+        }
     }
 }
 
@@ -190,7 +257,7 @@ impl<'a, I: Iterator<Item = Tok>> Iterator for Parser<'a, I> {
         if let Some(&(Eof, _)) | None = self.tokens.peek() {
             return None;
         }
-        Some(self.statement().map_err(BolloxError::from))
+        Some(self.declaration().map_err(BolloxError::from))
     }
 }
 
