@@ -10,14 +10,14 @@ pub mod token;
 use std::cell::Cell;
 
 use error::{BolloxError, BolloxErrors};
-use eval::Value;
+
 pub use scanner::Source;
 
-use crate::{ast::Expr, parser::parser};
+use crate::parser::parser;
 
 pub(crate) type Result<T> = std::result::Result<T, BolloxError>;
 
-pub fn run<T>(code: T) -> std::result::Result<Value, BolloxErrors>
+pub fn run<T>(code: T) -> std::result::Result<(), BolloxErrors>
 where
     T: AsRef<str> + std::fmt::Display,
 {
@@ -30,7 +30,7 @@ where
 
     let source = scanner::Source::new(code.as_ref());
 
-    // scan
+    // scan (source -> tokens)
     let tokens = source.into_iter().filter_map(|t| match t {
         Ok(t) => Some(t),
         Err(e) => {
@@ -39,37 +39,29 @@ where
         }
     });
 
-    // parse
-    let ast = parser(source, tokens)
-        .filter_map(|e| match e {
+    // parse (tokens -> statements)
+    parser(source, tokens)
+        .filter_map(|stmt| match stmt {
             Ok(e) => Some(e),
             Err(e) => {
                 store_err(e);
                 None
             }
         })
-        .collect::<Option<Expr>>();
-
-    // eval
-    let value = ast
-        .map(crate::eval::eval)
-        .map(|v| match v {
-            Ok(v) => Some(v),
-            Err(e) => {
-                store_err(e);
-                None
-            }
-        })
-        .unwrap_or_default();
+        // evaluate (statements)
+        .for_each(|stmt| match crate::eval::eval_stmt(stmt) {
+            Ok(_) => {}
+            Err(e) => store_err(e),
+        });
 
     let errors = errors.into_inner();
 
-    if errors.is_empty() {
-        Ok(value.unwrap())
-    } else {
+    if !errors.is_empty() {
         Err(BolloxErrors {
             src: code.to_string(),
             nested: errors.into_iter().map(Into::into).collect(),
         })
+    } else {
+        Ok(())
     }
 }

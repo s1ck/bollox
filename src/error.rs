@@ -78,6 +78,10 @@ pub enum SyntaxError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    MissingSemicolon(MissingSemicolon),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     UnsupportedToken(UnsupportedTokenType),
 
     #[error(transparent)]
@@ -89,6 +93,14 @@ pub enum SyntaxError {
 #[error("Missing closing parenthesis")]
 #[diagnostic()]
 pub struct MissingClosingParenthesis {
+    #[label("{}", self)]
+    span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Missing semicolon after statement")]
+#[diagnostic()]
+pub struct MissingSemicolon {
     #[label("{}", self)]
     span: SourceSpan,
 }
@@ -110,6 +122,10 @@ pub struct UnexpectedEndOfInput;
 impl SyntaxError {
     pub fn missing_closing_parenthesis(span: Span) -> BolloxError {
         Self::MissingClosingParenthesis(MissingClosingParenthesis { span: span.into() }).into()
+    }
+
+    pub fn missing_semicolon(span: Span) -> BolloxError {
+        Self::MissingSemicolon(MissingSemicolon { span: span.into() }).into()
     }
 
     pub fn unsupported_token_type(token: TokenType, span: Span) -> BolloxError {

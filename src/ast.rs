@@ -3,6 +3,12 @@ use std::fmt::Display;
 use crate::token::{Range, Span};
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum Stmt<'a> {
+    Expression(Expr<'a>),
+    Print(Expr<'a>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Expr<'a> {
     pub node: Box<Node<'a>>,
     pub span: Span,

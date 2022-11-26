@@ -1,7 +1,7 @@
 use std::{iter::Peekable, ops::Range};
 
 use crate::{
-    ast::{BinaryOp, Expr, Literal, Node, UnaryOp},
+    ast::{BinaryOp, Expr, Literal, Node, Stmt, UnaryOp},
     error::{BolloxError, SyntaxError},
     token::{Span, Token, TokenType},
     Result, Source,
@@ -40,6 +40,30 @@ pub struct Parser<'a, I: Iterator<Item = Tok>> {
 }
 
 impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
+    fn statement(&mut self) -> Result<Stmt<'a>> {
+        match self.tokens.peek() {
+            Some(&(Print, _)) => self.print_expression(),
+            _ => self.expression_stmt(),
+        }
+    }
+
+    fn print_expression(&mut self) -> Result<Stmt<'a>> {
+        let _ = self.tokens.next(); // consume PRINT token
+        let expr = self.expression()?;
+        match self.tokens.next() {
+            Some((Semicolon, _)) => Ok(Stmt::Print(expr)),
+            _ => Err(SyntaxError::missing_semicolon(expr.span)),
+        }
+    }
+
+    fn expression_stmt(&mut self) -> Result<Stmt<'a>> {
+        let expr = self.expression()?;
+        match self.tokens.next() {
+            Some((Semicolon, _)) => Ok(Stmt::Expression(expr)),
+            _ => Err(SyntaxError::missing_semicolon(expr.span)),
+        }
+    }
+
     // expression → equality ;
     fn expression(&mut self) -> Result<Expr<'a>> {
         self.equality()
@@ -160,11 +184,13 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
 }
 
 impl<'a, I: Iterator<Item = Tok>> Iterator for Parser<'a, I> {
-    type Item = Result<Expr<'a>>;
+    type Item = Result<Stmt<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let _ = self.tokens.peek()?; // check for EOI
-        Some(self.expression().map_err(BolloxError::from))
+        if let Some(&(Eof, _)) | None = self.tokens.peek() {
+            return None;
+        }
+        Some(self.statement().map_err(BolloxError::from))
     }
 }
 
@@ -174,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_simple_parser() -> Result<()> {
-        let source = "4 + 2";
+        let source = "4 + 2;";
         let source = Source::new(source);
         let tokens = source
             .into_iter()
@@ -190,13 +216,14 @@ mod tests {
                 Ok(e) => Some(e),
                 _ => None,
             })
-            .collect::<Option<Expr>>();
+            .collect::<Vec<Stmt>>();
 
         let num0 = Node::number(4_f64).into_expr(0..1);
         let num1 = Node::number(2_f64).into_expr(4..5);
         let expr = Node::add(num0, num1).into_expr(0..5);
+        let stmt = Stmt::Expression(expr);
 
-        assert_eq!(expres, Some(expr));
+        assert_eq!(expres[0], stmt);
 
         Ok(())
     }

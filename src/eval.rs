@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use crate::{
-    ast::{BinaryOp, Expr, Literal, Node, UnaryOp},
+    ast::{BinaryOp, Expr, Literal, Node, Stmt, UnaryOp},
     error::RuntimeError,
     token::Span,
     Result,
@@ -36,6 +36,16 @@ impl Display for Value {
             Value::Number(n) => n.fmt(f),
             Value::Str(s) => s.fmt(f),
         }
+    }
+}
+
+pub fn eval_stmt(stmt: Stmt<'_>) -> Result<()> {
+    match stmt {
+        Stmt::Expression(expr) => eval(expr).map(|_| Ok(()))?,
+        Stmt::Print(expr) => eval(expr).map(|v| {
+            println!("{v}");
+            Ok(())
+        })?,
     }
 }
 

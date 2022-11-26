@@ -41,7 +41,7 @@ fn run_repl() -> AppResult {
         }
 
         match bollox::run(line) {
-            Ok(value) => println!("{value}"),
+            Ok(_) => {}
             Err(bollox_errors) => println!("{:?}", miette::Report::new(bollox_errors)),
         }
     }
