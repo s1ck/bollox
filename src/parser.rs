@@ -110,7 +110,21 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     }
     // assignment -> IDENTIFIER "=" assignment | equality ;
     fn assignment(&mut self) -> Result<Expr<'a>> {
-        todo!()
+        let lhs = self.equality()?;
+        if let Some(&(Equal, eq_span)) = self.tokens.peek() {
+            let _ = self.tokens.next();
+            let rhs = self.assignment()?;
+            // if lhs is a variable, we got an assignment
+            return match *lhs.node {
+                Node::Variable { name } => {
+                    let range = lhs.span().union(rhs.span());
+                    Ok(Node::assign(name, rhs).into_expr(range))
+                }
+                _ => Err(SyntaxError::invalid_assignment_target(eq_span)),
+            };
+        }
+
+        Ok(lhs)
     }
     // equality   → comparison ( ( "!=" | "==" ) comparison )* ;
     fn equality(&mut self) -> Result<Expr<'a>> {

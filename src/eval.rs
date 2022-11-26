@@ -48,14 +48,14 @@ where
 }
 
 pub struct Interpreter<'a, I: Iterator<Item = Stmt<'a>>> {
-    environment: Environment<'a>,
+    env: Environment<'a>,
     statements: I,
 }
 
 impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
     fn new(statements: I) -> Self {
         Self {
-            environment: Environment::new(),
+            env: Environment::new(),
             statements,
         }
     }
@@ -74,19 +74,25 @@ impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
                     Some(expr) => self.eval(expr)?,
                     None => Value::Nil,
                 };
-                self.environment.define(name, value);
+                self.env.define(name, value);
                 Ok(())
             }
         }
     }
 
-    fn eval(&mut self, expr: Expr<'_>) -> Result<Value> {
+    fn eval(&mut self, expr: Expr<'a>) -> Result<Value> {
         let value = match (*expr.node, expr.span) {
-            (Node::Var { name }, span) => match self.environment.get(name) {
+            (Node::Variable { name }, span) => match self.env.get(name) {
                 Some(value) => value.clone(),
                 None => return Err(SyntaxError::undefined_variable(name, span)),
             },
-            (Node::Assign { name, expr }, span) => todo!(),
+            (Node::Assign { name, expr }, span) => {
+                let value = self.eval(expr)?;
+                match self.env.assign(name, value.clone()) {
+                    Some(_) => value,
+                    None => return Err(SyntaxError::undefined_variable(name, span)),
+                }
+            }
             (Node::Literal { lit }, _) => Value::from(lit),
             (Node::Group { expr }, _) => self.eval(expr)?,
             (Node::Unary { op, expr }, span) => {

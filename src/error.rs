@@ -95,6 +95,10 @@ pub enum SyntaxError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     UndefinedVariable(UndefinedVariable),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidAssignmentTarget(InvalidAssignmentTarget),
 }
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -144,6 +148,14 @@ pub struct UndefinedVariable {
     span: SourceSpan,
 }
 
+#[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Invalid assignment target")]
+#[diagnostic()]
+pub struct InvalidAssignmentTarget {
+    #[label("{}", self)]
+    span: SourceSpan,
+}
+
 impl SyntaxError {
     pub fn missing_closing_parenthesis(span: Span) -> BolloxError {
         Self::MissingClosingParenthesis(MissingClosingParenthesis { span: span.into() }).into()
@@ -175,6 +187,10 @@ impl SyntaxError {
             span: span.into(),
         })
         .into()
+    }
+
+    pub fn invalid_assignment_target(span: Span) -> BolloxError {
+        Self::InvalidAssignmentTarget(InvalidAssignmentTarget { span: span.into() }).into()
     }
 }
 

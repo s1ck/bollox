@@ -20,4 +20,8 @@ impl<'a> Environment<'a> {
     pub(crate) fn get(&self, name: &'a str) -> Option<&Value> {
         self.values.get(name)
     }
+
+    pub(crate) fn assign(&mut self, name: &'a str, value: Value) -> Option<Value> {
+        self.values.insert(name, value)
+    }
 }

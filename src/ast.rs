@@ -37,7 +37,7 @@ pub enum Node<'a, T: Sized = Expr<'a>> {
     Binary { lhs: T, op: BinaryOp, rhs: T },
     Group { expr: T },
     Literal { lit: Literal<'a> },
-    Var { name: &'a str },
+    Variable { name: &'a str },
     Assign { name: &'a str, expr: T },
 }
 
@@ -68,7 +68,11 @@ impl<'a, T: Sized> Node<'a, T> {
     }
 
     pub fn variable(name: &'a str) -> Self {
-        Self::Var { name }
+        Self::Variable { name }
+    }
+
+    pub fn assign(name: &'a str, expr: T) -> Self {
+        Self::Assign { name, expr }
     }
 
     pub fn string(s: &'a str) -> Self {
@@ -313,7 +317,7 @@ fn print(expr: Expr, source: &str) -> String {
             Node::Binary { lhs, op, rhs } => parenthesize(source, op, [lhs, rhs], res),
             Node::Group { expr } => parenthesize(source, "group", Some(expr), res),
             Node::Literal { lit: _ } => res.push_str(&source[Range::from(expr.span)]),
-            Node::Var { name } => res.push_str(&source[Range::from(expr.span)]),
+            Node::Variable { name } => res.push_str(&source[Range::from(expr.span)]),
             Node::Assign { name, expr } => parenthesize(source, "=", Some(expr), res),
         }
     }
