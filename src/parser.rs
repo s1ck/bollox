@@ -83,7 +83,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     fn statement(&mut self) -> Result<Stmt<'a>> {
         match self.tokens.peek() {
             Some(&(Print, _)) => self.print_stmt(),
-            Some(&(LeftBrace, _)) => self.block_stmt(),
+            Some(&(LeftBrace, span)) => self.block_stmt(span),
             _ => self.expr_stmt(),
         }
     }
@@ -105,22 +105,24 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         }
     }
     // block_stmt -> "{" declaration* "}"
-    fn block_stmt(&mut self) -> Result<Stmt<'a>> {
+    fn block_stmt(&mut self, start: Span) -> Result<Stmt<'a>> {
         let _ = self.tokens.next(); // consume { token
         let mut stmts = Vec::new();
 
-        loop {
+        let stmts = loop {
             match self.tokens.peek() {
-                Some(&(Eof, _)) | Some(&(RightBrace, _)) => break,
+                Some(&(RightBrace, _)) => {
+                    let _ = self.tokens.next();
+                    break stmts;
+                }
+                None | Some(&(Eof, _)) => {
+                    return Err(SyntaxError::missing_closing_parenthesis(start))
+                }
                 _ => stmts.push(self.declaration()?),
             }
-        }
+        };
 
-        match self.tokens.next() {
-            Some((RightBrace, _)) => Ok(Stmt::Block(stmts)),
-            // TODO pick proper span
-            _ => Err(SyntaxError::missing_closing_parenthesis((0..1).into())),
-        }
+        Ok(Stmt::Block(stmts))
     }
 
     // expression → assignment ;

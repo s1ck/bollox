@@ -40,9 +40,8 @@ fn run_repl() -> AppResult {
             break;
         }
 
-        match bollox::run(line) {
-            Ok(_) => {}
-            Err(bollox_errors) => println!("{:?}", miette::Report::new(bollox_errors)),
+        if let Err(bollox_errors) = bollox::run(line) {
+            println!("{:?}", miette::Report::new(bollox_errors))
         }
     }
     Ok(())

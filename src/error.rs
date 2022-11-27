@@ -3,12 +3,12 @@ use thiserror::Error;
 
 use crate::{
     ast::BinaryOp,
-    eval::Value,
     token::{Span, TokenType},
+    value::Value,
 };
 
 #[derive(Clone, Debug, Error, Diagnostic)]
-#[error("Errors while running Lox code")]
+#[error("Errors while running bollox code")]
 #[diagnostic()]
 pub struct BolloxErrors {
     #[source_code]

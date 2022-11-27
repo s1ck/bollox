@@ -318,8 +318,8 @@ fn print(expr: Expr, source: &str) -> String {
             Node::Binary { lhs, op, rhs } => parenthesize(source, op, [lhs, rhs], res),
             Node::Group { expr } => parenthesize(source, "group", Some(expr), res),
             Node::Literal { lit: _ } => res.push_str(&source[Range::from(expr.span)]),
-            Node::Variable { name } => res.push_str(&source[Range::from(expr.span)]),
-            Node::Assign { name, expr } => parenthesize(source, "=", Some(expr), res),
+            Node::Variable { name: _ } => res.push_str(&source[Range::from(expr.span)]),
+            Node::Assign { name: _, expr } => parenthesize(source, "=", Some(expr), res),
         }
     }
 

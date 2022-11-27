@@ -1,18 +1,20 @@
 #![allow(dead_code)]
 
+pub mod error;
+pub mod token;
+
 mod ast;
 mod env;
-pub mod error;
-mod eval;
+mod interp;
 mod parser;
 mod scanner;
-pub mod token;
+mod value;
 
 use std::cell::Cell;
 
 use error::{BolloxError, BolloxErrors};
 
-use eval::interpreter;
+use interp::interpreter;
 pub use scanner::Source;
 
 use crate::parser::parser;
@@ -51,19 +53,20 @@ where
     });
 
     // evaluate (statements)
-    interpreter(statements).for_each(|res| match res {
-        Ok(_) => {}
-        Err(e) => store_err(e),
+    interpreter(statements).for_each(|res| {
+        if let Err(e) = res {
+            store_err(e)
+        }
     });
 
     let errors = errors.into_inner();
 
-    if !errors.is_empty() {
+    if errors.is_empty() {
+        Ok(())
+    } else {
         Err(BolloxErrors {
             src: code.to_string(),
             nested: errors.into_iter().map(Into::into).collect(),
         })
-    } else {
-        Ok(())
     }
 }
