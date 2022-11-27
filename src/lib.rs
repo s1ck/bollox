@@ -1,23 +1,27 @@
 #![allow(dead_code)]
 
-pub mod ast;
 pub mod error;
-pub mod eval;
-pub mod parser;
-pub mod scanner;
 pub mod token;
+
+mod ast;
+mod env;
+mod interp;
+mod parser;
+mod scanner;
+mod value;
 
 use std::cell::Cell;
 
 use error::{BolloxError, BolloxErrors};
-use eval::Value;
+
+use interp::interpreter;
 pub use scanner::Source;
 
-use crate::{ast::Expr, parser::parser};
+use crate::parser::parser;
 
 pub(crate) type Result<T> = std::result::Result<T, BolloxError>;
 
-pub fn run<T>(code: T) -> std::result::Result<Value, BolloxErrors>
+pub fn run<T>(code: T) -> std::result::Result<(), BolloxErrors>
 where
     T: AsRef<str> + std::fmt::Display,
 {
@@ -30,7 +34,7 @@ where
 
     let source = scanner::Source::new(code.as_ref());
 
-    // scan
+    // scan (source -> tokens)
     let tokens = source.into_iter().filter_map(|t| match t {
         Ok(t) => Some(t),
         Err(e) => {
@@ -39,33 +43,26 @@ where
         }
     });
 
-    // parse
-    let ast = parser(source, tokens)
-        .filter_map(|e| match e {
-            Ok(e) => Some(e),
-            Err(e) => {
-                store_err(e);
-                None
-            }
-        })
-        .collect::<Option<Expr>>();
+    // parse (tokens -> statements)
+    let statements = parser(source, tokens).filter_map(|stmt| match stmt {
+        Ok(e) => Some(e),
+        Err(e) => {
+            store_err(e);
+            None
+        }
+    });
 
-    // eval
-    let value = ast
-        .map(crate::eval::eval)
-        .map(|v| match v {
-            Ok(v) => Some(v),
-            Err(e) => {
-                store_err(e);
-                None
-            }
-        })
-        .unwrap_or_default();
+    // evaluate (statements)
+    interpreter(statements).for_each(|res| {
+        if let Err(e) = res {
+            store_err(e)
+        }
+    });
 
     let errors = errors.into_inner();
 
     if errors.is_empty() {
-        Ok(value.unwrap())
+        Ok(())
     } else {
         Err(BolloxErrors {
             src: code.to_string(),

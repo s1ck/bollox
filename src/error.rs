@@ -3,12 +3,12 @@ use thiserror::Error;
 
 use crate::{
     ast::BinaryOp,
-    eval::Value,
     token::{Span, TokenType},
+    value::Value,
 };
 
 #[derive(Clone, Debug, Error, Diagnostic)]
-#[error("Errors while running Lox code")]
+#[error("Errors while running bollox code")]
 #[diagnostic()]
 pub struct BolloxErrors {
     #[source_code]
@@ -78,17 +78,49 @@ pub enum SyntaxError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    MissingSemicolon(MissingSemicolon),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingVariableName(MissingVariableName),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     UnsupportedToken(UnsupportedTokenType),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
     UnexpectedEndOfInput(UnexpectedEndOfInput),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UndefinedVariable(UndefinedVariable),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidAssignmentTarget(InvalidAssignmentTarget),
 }
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 #[error("Missing closing parenthesis")]
 #[diagnostic()]
 pub struct MissingClosingParenthesis {
+    #[label("{}", self)]
+    span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Missing semicolon after statement")]
+#[diagnostic()]
+pub struct MissingSemicolon {
+    #[label("{}", self)]
+    span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Missing variable name")]
+#[diagnostic()]
+pub struct MissingVariableName {
     #[label("{}", self)]
     span: SourceSpan,
 }
@@ -107,9 +139,34 @@ pub struct UnsupportedTokenType {
 #[diagnostic()]
 pub struct UnexpectedEndOfInput;
 
+#[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Undefined variable `{}`", found)]
+#[diagnostic()]
+pub struct UndefinedVariable {
+    found: String,
+    #[label("{}", self)]
+    span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Invalid assignment target")]
+#[diagnostic()]
+pub struct InvalidAssignmentTarget {
+    #[label("{}", self)]
+    span: SourceSpan,
+}
+
 impl SyntaxError {
     pub fn missing_closing_parenthesis(span: Span) -> BolloxError {
         Self::MissingClosingParenthesis(MissingClosingParenthesis { span: span.into() }).into()
+    }
+
+    pub fn missing_semicolon(span: Span) -> BolloxError {
+        Self::MissingSemicolon(MissingSemicolon { span: span.into() }).into()
+    }
+
+    pub fn missing_variable_name(span: Span) -> BolloxError {
+        Self::MissingVariableName(MissingVariableName { span: span.into() }).into()
     }
 
     pub fn unsupported_token_type(token: TokenType, span: Span) -> BolloxError {
@@ -122,6 +179,18 @@ impl SyntaxError {
 
     pub fn unexpected_eoi() -> BolloxError {
         Self::UnexpectedEndOfInput(UnexpectedEndOfInput).into()
+    }
+
+    pub fn undefined_variable(name: impl Into<String>, span: Span) -> BolloxError {
+        Self::UndefinedVariable(UndefinedVariable {
+            found: name.into(),
+            span: span.into(),
+        })
+        .into()
+    }
+
+    pub fn invalid_assignment_target(span: Span) -> BolloxError {
+        Self::InvalidAssignmentTarget(InvalidAssignmentTarget { span: span.into() }).into()
     }
 }
 

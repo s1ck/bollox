@@ -60,6 +60,13 @@ impl Span {
     pub fn union(self, other: Self) -> Range {
         self.offset..(other.offset + other.len)
     }
+
+    pub fn shrink_to_end(self) -> Self {
+        Self {
+            offset: self.offset + self.len,
+            len: 1,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -1,7 +1,9 @@
-use std::{cmp::Ordering, fmt::Display, sync::Arc};
+use std::cmp::Ordering;
+use std::fmt::Display;
+use std::sync::Arc;
 
 use crate::{
-    ast::{BinaryOp, Expr, Literal, Node, UnaryOp},
+    ast::{BinaryOp, Literal},
     error::RuntimeError,
     token::Span,
     Result,
@@ -38,73 +40,18 @@ impl Display for Value {
         }
     }
 }
-
-pub fn eval(expr: Expr<'_>) -> Result<Value> {
-    let value = match (*expr.node, expr.span) {
-        (Node::Literal { lit }, _) => Value::from(lit),
-        (Node::Group { expr }, _) => eval(expr)?,
-        (Node::Unary { op, expr }, span) => {
-            let val = eval(expr)?;
-            match op {
-                UnaryOp::Neg => val.neg(span)?,
-                UnaryOp::Not => val.not(span)?,
-            }
-        }
-        (Node::Binary { lhs, op, rhs }, span) => {
-            let lhs_val = eval(lhs)?;
-            let rhs_val = eval(rhs)?;
-            match op {
-                BinaryOp::Equals => lhs_val.eq(&rhs_val)?,
-                BinaryOp::NotEquals => lhs_val.neq(&rhs_val)?,
-                BinaryOp::LessThan => lhs_val.lt(&rhs_val)?,
-                BinaryOp::LessThanOrEqual => lhs_val.lte(&rhs_val)?,
-                BinaryOp::GreaterThan => lhs_val.gt(&rhs_val)?,
-                BinaryOp::GreaterThanOrEqual => lhs_val.gte(&rhs_val)?,
-                BinaryOp::Add => lhs_val.add(&rhs_val, span)?,
-                BinaryOp::Sub => lhs_val.sub(&rhs_val, span)?,
-                BinaryOp::Mul => lhs_val.mul(&rhs_val, span)?,
-                BinaryOp::Div => lhs_val.div(&rhs_val, span)?,
-            }
-        }
-    };
-
-    Ok(value)
-}
-
 impl Value {
-    fn as_bool(&self, _span: Span) -> Result<bool> {
-        Ok(match self {
-            Value::Boolean(b) => *b,
-            Value::Nil => false,
-            _ => true,
-        })
-    }
-
-    fn as_num(&self, span: Span) -> Result<f64> {
-        let Value::Number(n) = self else {
-           return Err(RuntimeError::non_number(self, span))
-        };
-        Ok(*n)
-    }
-
-    fn as_str(&self, span: Span) -> Result<Arc<str>> {
-        let Value::Str(s) = self else {
-            return Err(RuntimeError::non_str(self, span))
-        };
-        Ok(Arc::clone(s))
-    }
-
-    fn not(&self, span: Span) -> Result<Self> {
+    pub(crate) fn not(&self, span: Span) -> Result<Self> {
         let b = self.as_bool(span)?;
         Ok((!b).into())
     }
 
-    fn neg(&self, span: Span) -> Result<Self> {
+    pub(crate) fn neg(&self, span: Span) -> Result<Self> {
         let n = self.as_num(span)?;
         Ok((-1.0 * n).into())
     }
 
-    fn add(&self, rhs: &Self, span: Span) -> Result<Self> {
+    pub(crate) fn add(&self, rhs: &Self, span: Span) -> Result<Self> {
         Ok(match self {
             Value::Number(lhs) => {
                 let rhs = rhs.as_num(span)?;
@@ -125,64 +72,86 @@ impl Value {
         })
     }
 
-    fn sub(&self, rhs: &Self, span: Span) -> Result<Self> {
+    pub(crate) fn sub(&self, rhs: &Self, span: Span) -> Result<Self> {
         let lhs = self.as_num(span)?;
         let rhs = rhs.as_num(span)?;
         Ok((lhs - rhs).into())
     }
 
-    fn mul(&self, rhs: &Self, span: Span) -> Result<Self> {
+    pub(crate) fn mul(&self, rhs: &Self, span: Span) -> Result<Self> {
         let lhs = self.as_num(span)?;
         let rhs = rhs.as_num(span)?;
         Ok((lhs * rhs).into())
     }
 
-    fn div(&self, rhs: &Self, span: Span) -> Result<Self> {
+    pub(crate) fn div(&self, rhs: &Self, span: Span) -> Result<Self> {
         let lhs = self.as_num(span)?;
         let rhs = rhs.as_num(span)?;
         Ok((lhs / rhs).into())
     }
 
-    fn eq(&self, rhs: &Self) -> Result<Self> {
+    pub(crate) fn eq(&self, rhs: &Self) -> Result<Self> {
         Ok(self
             .partial_cmp(rhs)
             .map_or(false, |ord| ord == Ordering::Equal)
             .into())
     }
 
-    fn neq(&self, rhs: &Self) -> Result<Self> {
+    pub(crate) fn neq(&self, rhs: &Self) -> Result<Self> {
         Ok(self
             .partial_cmp(rhs)
             .map_or(false, |ord| ord != Ordering::Equal)
             .into())
     }
 
-    fn lt(&self, rhs: &Self) -> Result<Self> {
+    pub(crate) fn lt(&self, rhs: &Self) -> Result<Self> {
         Ok(self
             .partial_cmp(rhs)
             .map_or(false, |ord| ord == Ordering::Less)
             .into())
     }
 
-    fn gt(&self, rhs: &Self) -> Result<Self> {
+    pub(crate) fn gt(&self, rhs: &Self) -> Result<Self> {
         Ok(self
             .partial_cmp(rhs)
             .map_or(false, |ord| ord == Ordering::Greater)
             .into())
     }
 
-    fn lte(&self, rhs: &Self) -> Result<Self> {
+    pub(crate) fn lte(&self, rhs: &Self) -> Result<Self> {
         Ok(self
             .partial_cmp(rhs)
             .map_or(false, |ord| ord != Ordering::Greater)
             .into())
     }
 
-    fn gte(&self, rhs: &Self) -> Result<Self> {
+    pub(crate) fn gte(&self, rhs: &Self) -> Result<Self> {
         Ok(self
             .partial_cmp(rhs)
             .map_or(false, |ord| ord != Ordering::Less)
             .into())
+    }
+
+    fn as_bool(&self, _span: Span) -> Result<bool> {
+        Ok(match self {
+            Value::Boolean(b) => *b,
+            Value::Nil => false,
+            _ => true,
+        })
+    }
+
+    fn as_num(&self, span: Span) -> Result<f64> {
+        let Value::Number(n) = self else {
+           return Err(RuntimeError::non_number(self, span))
+        };
+        Ok(*n)
+    }
+
+    fn as_str(&self, span: Span) -> Result<Arc<str>> {
+        let Value::Str(s) = self else {
+            return Err(RuntimeError::non_str(self, span))
+        };
+        Ok(Arc::clone(s))
     }
 
     fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
