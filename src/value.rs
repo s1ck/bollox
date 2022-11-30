@@ -132,7 +132,7 @@ impl Value {
             .into())
     }
 
-    fn as_bool(&self, _span: Span) -> Result<bool> {
+    pub(crate) fn as_bool(&self, _span: Span) -> Result<bool> {
         Ok(match self {
             Value::Boolean(b) => *b,
             Value::Nil => false,

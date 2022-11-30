@@ -8,6 +8,7 @@ pub enum Stmt<'a> {
     Expression(Expr<'a>),
     Print(Expr<'a>),
     Var(&'a str, Option<Expr<'a>>),
+    If(Expr<'a>, Box<Stmt<'a>>, Option<Box<Stmt<'a>>>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -31,6 +32,25 @@ impl<'a> FromIterator<Expr<'a>> for Option<Expr<'a>> {
         iter.into_iter().next()
     }
 }
+
+// pub struct Node<T> {
+//     item: T,
+//     span: Span,
+// }
+
+// type StmtNode = Node<Box<Stmt>>;
+
+// pub enum Stmt {
+//     Block<Vec<StmtNode>>,
+//     If(ExprNode, StmtNode, Option<StmtNode>),
+// }
+
+// type ExprNode = Node<Box<Expr>>;
+
+// pub enum Expr {
+//     Unary,
+//     Binary,
+// }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Node<'a, T: Sized = Expr<'a>> {

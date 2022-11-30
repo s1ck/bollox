@@ -84,6 +84,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         match self.tokens.peek() {
             Some(&(Print, _)) => self.print_stmt(),
             Some(&(LeftBrace, span)) => self.block_stmt(span),
+            Some(&(If, span)) => self.if_stmt(),
             _ => self.expr_stmt(),
         }
     }
@@ -123,6 +124,36 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         };
 
         Ok(Stmt::Block(stmts))
+    }
+    // if_stmt -> "if" "(" expression ")" statement ( "else" statement )? ;
+    fn if_stmt(&mut self) -> Result<Stmt<'a>> {
+        let _ = self.tokens.next(); // consume If token
+
+        let condition = match self.tokens.peek() {
+            Some(&(LeftParen, _)) => {
+                let _ = self.tokens.next(); // consume ( token
+                self.expression()?
+            }
+            _ => todo!("error"),
+        };
+
+        match self.tokens.peek() {
+            Some(&(RightParen, _)) => {
+                let _ = self.tokens.next();
+            }
+            _ => todo!("error"),
+        }
+
+        let then_branch = self.statement()?;
+        let else_branch = match self.tokens.peek() {
+            Some(&(Else, _)) => {
+                let _ = self.tokens.next(); // consume Else token
+                Some(Box::new(self.statement()?))
+            }
+            _ => None,
+        };
+
+        Ok(Stmt::If(condition, Box::new(then_branch), else_branch))
     }
 
     // expression → assignment ;

@@ -47,6 +47,15 @@ impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
                 let new_env = Environment::with_enclosing(self.environment.clone());
                 self.eval_block(stmts, new_env.into())
             }
+            Stmt::If(condition, then_branch, else_branch) => {
+                let condition_span = condition.span;
+                if self.eval_expr(condition)?.as_bool(condition_span)? {
+                    self.eval_stmt(*then_branch)?
+                } else if let Some(else_branch) = else_branch {
+                    self.eval_stmt(*else_branch)?
+                }
+                Ok(())
+            }
         }
     }
 
