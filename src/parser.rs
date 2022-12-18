@@ -1,8 +1,10 @@
-use std::{iter::Peekable, ops::Range};
+use std::iter::Peekable;
 
 use crate::{
-    ast::{BinaryOp, Expr, Literal, Node, Stmt, UnaryOp},
     error::{BolloxError, SyntaxError},
+    expr::{BinaryOp, Expr, ExprNode, Literal, UnaryOp},
+    node::Node,
+    stmt::{Stmt, StmtNode},
     token::{Span, Token, TokenType},
     Result, Source,
 };
@@ -34,6 +36,43 @@ where
     Parser { source, tokens }
 }
 
+macro_rules! peek {
+    ($this:ident, { $($pat:pat => $expr:expr),+ $(,)? }) => {
+        match $this.tokens.peek() {
+            $(Some(&$pat) => {
+                let _ = $this.tokens.next();
+                Some($expr)
+            }),+,
+            _ => None,
+        }
+    };
+
+    ($this:ident, $($pat:pat),+ $(,)?) => {
+        match $this.tokens.peek() {
+            $(Some(&($pat, _)) => {
+                let _ = $this.tokens.next();
+                true
+            }),+,
+            _ => false,
+        }
+    };
+}
+
+macro_rules! bin_op {
+    ($this:ident, $descent:ident, { $($pat:pat => $expr:expr),+ $(,)? }) => {{
+        let mut lhs = $this.$descent()?;
+        loop {
+            let op = match peek!($this, { $($pat => $expr),+ }) {
+                Some(op) => op,
+                None => break,
+            };
+            let rhs = $this.$descent()?;
+            let span = lhs.span.union(rhs.span);
+            lhs = Expr::binary(lhs, op, rhs).at(span);
+        }
+        Ok(lhs)
+    }};
+}
 pub struct Parser<'a, I: Iterator<Item = Tok>> {
     source: Source<'a>,
     tokens: Peekable<I>,
@@ -42,179 +81,148 @@ pub struct Parser<'a, I: Iterator<Item = Tok>> {
 impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     // program     -> declaration* EOF ;
     // declaration -> var_decl | statement ;
-    fn declaration(&mut self) -> Result<Stmt<'a>> {
-        let res = match self.tokens.peek() {
-            Some(&(Var, _)) => self.var_decl(),
-            _ => self.statement(),
-        };
+    fn declaration(&mut self) -> Result<StmtNode<'a>> {
+        let res = peek!(self, {
+            (Var, span) => self.var_decl(span),
+        })
+        .transpose()?;
 
         match res {
-            Ok(stmt) => Ok(stmt),
-            Err(e) => {
-                self.synchronize();
-                Err(e)
-            }
+            Some(stmt) => Ok(stmt),
+            None => match self.statement() {
+                Ok(stmt) => Ok(stmt),
+                Err(e) => {
+                    self.synchronize();
+                    Err(e)
+                }
+            },
         }
     }
     // var_decl -> "var" IDENTIFER ( "=" expression )? ";" ;
-    fn var_decl(&mut self) -> Result<Stmt<'a>> {
-        let (_, var_span) = self.tokens.next().unwrap(); // consume VAR token
-        let (name, name_span) = match self.tokens.next() {
-            Some((Identifier, span)) => (&self.source.source[Range::<usize>::from(span)], span),
-            _ => return Err(SyntaxError::missing_variable_name(var_span)),
-        };
-        let initializer = match self.tokens.peek() {
-            Some(&(Equal, _)) => {
-                let _ = self.tokens.next(); // consume EQUAL
-                Some(self.expression()?)
-            }
-            _ => None,
-        };
-        match self.tokens.next() {
-            Some((Semicolon, _)) => Ok(Stmt::Var(name, initializer)),
-            _ => Err(SyntaxError::missing_semicolon(
-                initializer
-                    .map(|e| e.span)
-                    .unwrap_or_else(|| name_span.shrink_to_end()),
-            )),
-        }
+    fn var_decl(&mut self, var_span: Span) -> Result<StmtNode<'a>> {
+        let ident = self.identifier(var_span)?;
+        let init = peek!(self, { (Equal, _) => self.expression()? });
+        let end = self.expect(Semicolon)?;
+        Ok(Stmt::var(ident, init).at(var_span.union(end)))
     }
     // statement -> expr_stmt | print_stmt | block_stmt ;
-    fn statement(&mut self) -> Result<Stmt<'a>> {
-        match self.tokens.peek() {
-            Some(&(Print, _)) => self.print_stmt(),
-            Some(&(LeftBrace, span)) => self.block_stmt(span),
-            _ => self.expr_stmt(),
+    fn statement(&mut self) -> Result<StmtNode<'a>> {
+        let stmt = peek!(self, {
+            (Print, span) => self.print_stmt(span),
+            (LeftBrace, span) => self.block_stmt(span),
+            (If, span) => self.if_stmt(span),
+        });
+        match stmt {
+            Some(Ok(stmt)) => Ok(stmt),
+            Some(Err(err)) => Err(err),
+            None => self.expr_stmt(),
         }
     }
     // expr_stmt -> expression ";" ;
-    fn expr_stmt(&mut self) -> Result<Stmt<'a>> {
+    fn expr_stmt(&mut self) -> Result<StmtNode<'a>> {
         let expr = self.expression()?;
-        match self.tokens.next() {
-            Some((Semicolon, _)) => Ok(Stmt::Expression(expr)),
-            _ => Err(SyntaxError::missing_semicolon(expr.span)),
-        }
+        let end = self.expect(Semicolon)?;
+        let span = expr.span.union(end);
+        Ok(Stmt::expression(expr).at(span))
     }
     // print_stmt -> "print" expression ";" ;
-    fn print_stmt(&mut self) -> Result<Stmt<'a>> {
-        let _ = self.tokens.next(); // consume PRINT token
+    fn print_stmt(&mut self, print_span: Span) -> Result<StmtNode<'a>> {
         let expr = self.expression()?;
-        match self.tokens.next() {
-            Some((Semicolon, _)) => Ok(Stmt::Print(expr)),
-            _ => Err(SyntaxError::missing_semicolon(expr.span)),
-        }
+        let span = self.expect(Semicolon)?;
+        Ok(Stmt::print(expr).at(print_span.union(span)))
     }
     // block_stmt -> "{" declaration* "}"
-    fn block_stmt(&mut self, start: Span) -> Result<Stmt<'a>> {
-        let _ = self.tokens.next(); // consume { token
+    fn block_stmt(&mut self, start: Span) -> Result<StmtNode<'a>> {
         let mut stmts = Vec::new();
-
-        let stmts = loop {
+        let end = loop {
             match self.tokens.peek() {
-                Some(&(RightBrace, _)) => {
+                Some(&(RightBrace, span)) => {
                     let _ = self.tokens.next();
-                    break stmts;
+                    break span;
                 }
-                None | Some(&(Eof, _)) => {
-                    return Err(SyntaxError::missing_closing_parenthesis(start))
+                Some(&(Eof, span)) => {
+                    return Err(SyntaxError::unexpected_token(RightBrace, Eof, span))
                 }
+                None => return Err(SyntaxError::unexpected_eoi()),
                 _ => stmts.push(self.declaration()?),
             }
         };
+        Ok(Stmt::block(stmts).at(start.union(end)))
+    }
+    // if_stmt -> "if" "(" expression ")" statement ( "else" statement )? ;
+    fn if_stmt(&mut self, if_span: Span) -> Result<StmtNode<'a>> {
+        self.expect(LeftParen)?;
+        let cond = self.expression()?;
+        self.expect(RightParen)?;
+        let then_ = self.statement()?;
 
-        Ok(Stmt::Block(stmts))
+        match self.tokens.peek() {
+            Some(&(Else, _)) => {
+                let _ = self.tokens.next();
+                let else_ = self.statement()?;
+                let span = if_span.union(else_.span);
+                Ok(Stmt::if_else(cond, then_, else_).at(span))
+            }
+            _ => {
+                let span = if_span.union(then_.span);
+                Ok(Stmt::if_(cond, then_).at(span))
+            }
+        }
     }
 
     // expression → assignment ;
-    fn expression(&mut self) -> Result<Expr<'a>> {
+    fn expression(&mut self) -> Result<ExprNode<'a>> {
         self.assignment()
     }
     // assignment -> IDENTIFIER "=" assignment | equality ;
-    fn assignment(&mut self) -> Result<Expr<'a>> {
-        let lhs = self.equality()?;
-        if let Some(&(Equal, eq_span)) = self.tokens.peek() {
-            let _ = self.tokens.next();
-            let rhs = self.assignment()?;
-            // if lhs is a variable, we got an assignment
-            return match *lhs.node {
-                Node::Variable { name } => {
-                    let range = lhs.span().union(rhs.span());
-                    Ok(Node::assign(name, rhs).into_expr(range))
+    fn assignment(&mut self) -> Result<ExprNode<'a>> {
+        let ident = self.equality()?;
+
+        if peek!(self, Equal) {
+            let assignment = self.assignment()?;
+            return match *ident.item {
+                Expr::Variable { name } => {
+                    let range = ident.span.union(assignment.span);
+                    Ok(Expr::assign(name, assignment).at(range))
                 }
-                _ => Err(SyntaxError::invalid_assignment_target(eq_span)),
+                _ => Err(SyntaxError::invalid_assignment_target(ident.span)),
             };
         }
 
-        Ok(lhs)
+        Ok(ident)
     }
     // equality   → comparison ( ( "!=" | "==" ) comparison )* ;
-    fn equality(&mut self) -> Result<Expr<'a>> {
-        let mut lhs = self.comparison()?;
-        loop {
-            let op = match self.tokens.peek() {
-                Some(&(BangEqual, _)) => BinaryOp::NotEquals,
-                Some(&(EqualEqual, _)) => BinaryOp::Equals,
-                _ => break,
-            };
-            let _ = self.tokens.next();
-            let rhs = self.comparison()?;
-            let range = lhs.span().union(rhs.span());
-            lhs = Node::binary(lhs, op, rhs).into_expr(range);
-        }
-        Ok(lhs)
+    fn equality(&mut self) -> Result<ExprNode<'a>> {
+        bin_op!(self, comparison, {
+            (BangEqual, _) => BinaryOp::NotEquals,
+            (EqualEqual, _) => BinaryOp::Equals,
+        })
     }
     // comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-    fn comparison(&mut self) -> Result<Expr<'a>> {
-        let mut lhs = self.term()?;
-        loop {
-            let op = match self.tokens.peek() {
-                Some(&(Greater, _)) => BinaryOp::GreaterThan,
-                Some(&(GreaterEqual, _)) => BinaryOp::GreaterThanOrEqual,
-                Some(&(Less, _)) => BinaryOp::LessThan,
-                Some(&(LessEqual, _)) => BinaryOp::LessThanOrEqual,
-                _ => break,
-            };
-            let _ = self.tokens.next();
-            let rhs = self.term()?;
-            let range = lhs.span().union(rhs.span());
-            lhs = Node::binary(lhs, op, rhs).into_expr(range);
-        }
-        Ok(lhs)
+    fn comparison(&mut self) -> Result<ExprNode<'a>> {
+        bin_op!(self, term, {
+            (Greater, _) => BinaryOp::GreaterThan,
+            (GreaterEqual, _) => BinaryOp::GreaterThanOrEqual,
+            (Less, _) => BinaryOp::LessThan,
+            (LessEqual, _) => BinaryOp::LessThanOrEqual,
+        })
     }
     // term       → factor ( ( "-" | "+" ) factor )* ;
-    fn term(&mut self) -> Result<Expr<'a>> {
-        let mut lhs = self.factor()?;
-        loop {
-            let op = match self.tokens.peek() {
-                Some(&(Minus, _)) => BinaryOp::Sub,
-                Some(&(Plus, _)) => BinaryOp::Add,
-                _ => break,
-            };
-            let _ = self.tokens.next();
-            let rhs = self.factor()?;
-            let range = lhs.span().union(rhs.span());
-            lhs = Node::binary(lhs, op, rhs).into_expr(range);
-        }
-        Ok(lhs)
+    fn term(&mut self) -> Result<ExprNode<'a>> {
+        bin_op!(self, factor, {
+            (Minus, _) => BinaryOp::Sub,
+            (Plus, _) => BinaryOp::Add,
+        })
     }
     // factor     → unary ( ( "/" | "*" ) unary )* ;
-    fn factor(&mut self) -> Result<Expr<'a>> {
-        let mut lhs = self.unary()?;
-        loop {
-            let op = match self.tokens.peek() {
-                Some(&(Slash, _)) => BinaryOp::Div,
-                Some(&(Star, _)) => BinaryOp::Mul,
-                _ => break,
-            };
-            let _ = self.tokens.next();
-            let rhs = self.unary()?;
-            let range = lhs.span().union(rhs.span());
-            lhs = Node::binary(lhs, op, rhs).into_expr(range);
-        }
-        Ok(lhs)
+    fn factor(&mut self) -> Result<ExprNode<'a>> {
+        bin_op!(self, unary, {
+            (Slash, _) => BinaryOp::Div,
+            (Star, _) => BinaryOp::Mul,
+        })
     }
     // unary      → ( "!" | "-" ) unary | primary ;
-    fn unary(&mut self) -> Result<Expr<'a>> {
+    fn unary(&mut self) -> Result<ExprNode<'a>> {
         let (op, span) = match self.tokens.peek() {
             Some(&(Bang, span)) => (UnaryOp::Not, span),
             Some(&(Minus, span)) => (UnaryOp::Neg, span),
@@ -222,48 +230,61 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         };
         let _ = self.tokens.next();
         let inner = self.unary()?;
-        let range = span.union(inner.span());
-        Ok(Node::unary(op, inner).into_expr(range))
+        let range = span.union(inner.span);
+        Ok(Expr::unary(op, inner).at(range))
     }
     // primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
-    fn primary(&mut self) -> Result<Expr<'a>> {
-        let (node, span): (Node<Expr<'a>>, _) = match self.tokens.next() {
-            Some((False, span)) => (Node::fals(), span),
-            Some((True, span)) => (Node::tru(), span),
-            Some((Nil, span)) => (Node::nil(), span),
+    fn primary(&mut self) -> Result<ExprNode<'a>> {
+        let (node, span) = match self.tokens.next() {
+            Some((False, span)) => (Expr::fals(), span),
+            Some((True, span)) => (Expr::tru(), span),
+            Some((Nil, span)) => (Expr::nil(), span),
             Some((Number, span)) => {
-                let value = &self.source.source[Range::<usize>::from(span)];
+                let value = self.source.slice(span);
                 let value = value.parse::<f64>().unwrap();
                 let value = Literal::Number(value);
-                (Node::literal(value), span)
+                (Expr::literal(value), span)
             }
             Some((String, span)) => {
-                let value = &self.source.source[Range::<usize>::from(span)];
+                let value = self.source.slice(span);
                 let value = Literal::String(value);
-                (Node::literal(value), span)
+                (Expr::literal(value), span)
             }
             Some((LeftParen, span)) => {
                 let expr = self.expression()?;
-                let span = span.union(expr.span());
-
-                match self.tokens.next() {
-                    Some((RightParen, r_span)) => {
-                        let span = r_span.union(span.into());
-                        (Node::group(expr), span.into())
-                    }
-                    _ => return Err(SyntaxError::missing_closing_parenthesis(span.into())),
-                }
+                let end = self.expect(RightParen)?;
+                (Expr::group(expr), span.union(end).into())
             }
             Some((Identifier, span)) => {
-                let value = &self.source.source[Range::<usize>::from(span)];
-                (Node::variable(value), span)
+                let value = self.source.slice(span);
+                (Expr::variable(value), span)
             }
-
             Some((token, span)) => return Err(SyntaxError::unsupported_token_type(token, span)),
             None => return Err(SyntaxError::unexpected_eoi()),
         };
 
-        Ok(node.into_expr(span.into()))
+        Ok(node.at(span))
+    }
+
+    fn identifier(&mut self, span: Span) -> Result<Node<&'a str>> {
+        let (name, name_span) = match self.tokens.next() {
+            Some((Identifier, span)) => (self.source.slice(span), span),
+            _ => return Err(SyntaxError::missing_variable_name(span)),
+        };
+
+        Ok(Node::new(name, name_span))
+    }
+
+    fn expect(&mut self, expected: TokenType) -> Result<Span> {
+        match self.tokens.next() {
+            Some((typ, span)) if expected == typ => Ok(span),
+            Some((typ, span)) => Err(SyntaxError::unexpected_token(expected, typ, span)),
+            None => Err(SyntaxError::unexpected_token(
+                expected,
+                Eof,
+                self.source.source.len(),
+            )),
+        }
     }
 }
 
@@ -286,7 +307,7 @@ impl<I: Iterator<Item = Tok>> Parser<'_, I> {
 }
 
 impl<'a, I: Iterator<Item = Tok>> Iterator for Parser<'a, I> {
-    type Item = Result<Stmt<'a>>;
+    type Item = Result<StmtNode<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(&(Eof, _)) | None = self.tokens.peek() {
@@ -313,19 +334,19 @@ mod tests {
             .collect::<Vec<_>>();
 
         let parser = parser(source, tokens);
-        let expres = parser
+        let actual = parser
             .filter_map(|e| match e {
                 Ok(e) => Some(e),
                 _ => None,
             })
-            .collect::<Vec<Stmt>>();
+            .collect::<Option<StmtNode<'_>>>();
 
-        let num0 = Node::number(4_f64).into_expr(0..1);
-        let num1 = Node::number(2_f64).into_expr(4..5);
-        let expr = Node::add(num0, num1).into_expr(0..5);
-        let stmt = Stmt::Expression(expr);
+        let num0 = Expr::number(4_f64).at(0..1);
+        let num1 = Expr::number(2_f64).at(4..5);
+        let expr = Expr::add(num0, num1).at(0..5);
+        let expected = Stmt::expression(expr).at(0..6);
 
-        assert_eq!(expres[0], stmt);
+        assert_eq!(actual, Some(expected));
 
         Ok(())
     }

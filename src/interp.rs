@@ -1,24 +1,25 @@
 use crate::{
-    ast::{BinaryOp, Expr, Node, Stmt, UnaryOp},
     env::{Environment, EnvironmentRef},
     error::SyntaxError,
+    expr::{BinaryOp, Expr, ExprNode, UnaryOp},
+    stmt::{Stmt, StmtNode},
     value::Value,
     Result,
 };
 
 pub fn interpreter<'a, I>(statements: I) -> Interpreter<'a, I::IntoIter>
 where
-    I: IntoIterator<Item = Stmt<'a>>,
+    I: IntoIterator<Item = StmtNode<'a>>,
 {
     Interpreter::new(statements.into_iter())
 }
 
-pub struct Interpreter<'a, I: Iterator<Item = Stmt<'a>>> {
+pub struct Interpreter<'a, I: Iterator<Item = StmtNode<'a>>> {
     environment: EnvironmentRef<'a>,
     statements: I,
 }
 
-impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
+impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
     fn new(statements: I) -> Self {
         Self {
             environment: Environment::new().into(),
@@ -27,9 +28,9 @@ impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
     }
 }
 
-impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
-    fn eval_stmt(&mut self, stmt: Stmt<'a>) -> Result<()> {
-        match stmt {
+impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
+    fn eval_stmt(&mut self, stmt: StmtNode<'a>) -> Result<()> {
+        match *stmt.item {
             Stmt::Expression(expr) => self.eval_expr(expr).map(|_| Ok(()))?,
             Stmt::Print(expr) => self.eval_expr(expr).map(|v| {
                 println!("{v}");
@@ -40,17 +41,26 @@ impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
                     Some(expr) => self.eval_expr(expr)?,
                     None => Value::Nil,
                 };
-                self.environment.borrow_mut().define(name, value);
+                self.environment.borrow_mut().define(name.item, value);
                 Ok(())
             }
             Stmt::Block(stmts) => {
                 let new_env = Environment::with_enclosing(self.environment.clone());
                 self.eval_block(stmts, new_env.into())
             }
+            Stmt::If(condition, then_branch, else_branch) => {
+                let condition_span = condition.span;
+                if self.eval_expr(condition)?.as_bool(condition_span)? {
+                    self.eval_stmt(then_branch)?
+                } else if let Some(else_branch) = else_branch {
+                    self.eval_stmt(else_branch)?
+                }
+                Ok(())
+            }
         }
     }
 
-    fn eval_block(&mut self, stmts: Vec<Stmt<'a>>, env: EnvironmentRef<'a>) -> Result<()> {
+    fn eval_block(&mut self, stmts: Vec<StmtNode<'a>>, env: EnvironmentRef<'a>) -> Result<()> {
         let prev = std::mem::replace(&mut self.environment, env);
         // try-catch
         let eval_stmts = || -> Result<()> {
@@ -65,29 +75,30 @@ impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
         res
     }
 
-    fn eval_expr(&mut self, expr: Expr<'a>) -> Result<Value> {
-        let value = match (*expr.node, expr.span) {
-            (Node::Variable { name }, span) => match self.environment.borrow().get(name) {
+    fn eval_expr(&mut self, expr: ExprNode<'a>) -> Result<Value> {
+        let span = expr.span;
+        let value = match *expr.item {
+            Expr::Variable { name } => match self.environment.borrow().get(name) {
                 Some(value) => value,
                 None => return Err(SyntaxError::undefined_variable(name, span)),
             },
-            (Node::Assign { name, expr }, span) => {
+            Expr::Assign { name, expr } => {
                 let value = self.eval_expr(expr)?;
                 match self.environment.borrow_mut().assign(name, value.clone()) {
                     Some(_) => value,
                     None => return Err(SyntaxError::undefined_variable(name, span)),
                 }
             }
-            (Node::Literal { lit }, _) => Value::from(lit),
-            (Node::Group { expr }, _) => self.eval_expr(expr)?,
-            (Node::Unary { op, expr }, span) => {
+            Expr::Literal { lit } => Value::from(lit),
+            Expr::Group { expr } => self.eval_expr(expr)?,
+            Expr::Unary { op, expr } => {
                 let val = self.eval_expr(expr)?;
                 match op {
                     UnaryOp::Neg => val.neg(span)?,
                     UnaryOp::Not => val.not(span)?,
                 }
             }
-            (Node::Binary { lhs, op, rhs }, span) => {
+            Expr::Binary { lhs, op, rhs } => {
                 let lhs_val = self.eval_expr(lhs)?;
                 let rhs_val = self.eval_expr(rhs)?;
                 match op {
@@ -109,7 +120,7 @@ impl<'a, I: Iterator<Item = Stmt<'a>>> Interpreter<'a, I> {
     }
 }
 
-impl<'a, I: Iterator<Item = Stmt<'a>>> Iterator for Interpreter<'a, I> {
+impl<'a, I: Iterator<Item = StmtNode<'a>>> Iterator for Interpreter<'a, I> {
     type Item = Result<()>;
 
     fn next(&mut self) -> Option<Self::Item> {

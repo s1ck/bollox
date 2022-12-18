@@ -57,7 +57,8 @@ impl From<Span> for SourceSpan {
 }
 
 impl Span {
-    pub fn union(self, other: Self) -> Range {
+    pub fn union(self, other: impl Into<Self>) -> Range {
+        let other = other.into();
         self.offset..(other.offset + other.len)
     }
 

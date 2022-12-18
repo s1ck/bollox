@@ -2,7 +2,7 @@ use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
 use crate::{
-    ast::BinaryOp,
+    expr::BinaryOp,
     token::{Span, TokenType},
     value::Value,
 };
@@ -86,6 +86,10 @@ pub enum SyntaxError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    UnexpectedToken(UnexpectedTokenType),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     UnsupportedToken(UnsupportedTokenType),
 
     #[error(transparent)]
@@ -126,6 +130,16 @@ pub struct MissingVariableName {
 }
 
 #[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Unexpected token, expected {:?}, found {:?}.", expected, found)]
+#[diagnostic()]
+pub struct UnexpectedTokenType {
+    expected: TokenType,
+    found: TokenType,
+    #[label("{}", self)]
+    span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Error, Diagnostic)]
 #[error("Unsupported token type {:?}.", found)]
 #[diagnostic()]
 pub struct UnsupportedTokenType {
@@ -157,19 +171,28 @@ pub struct InvalidAssignmentTarget {
 }
 
 impl SyntaxError {
-    pub fn missing_closing_parenthesis(span: Span) -> BolloxError {
+    pub fn missing_closing_parenthesis(span: impl Into<SourceSpan>) -> BolloxError {
         Self::MissingClosingParenthesis(MissingClosingParenthesis { span: span.into() }).into()
     }
 
-    pub fn missing_semicolon(span: Span) -> BolloxError {
-        Self::MissingSemicolon(MissingSemicolon { span: span.into() }).into()
-    }
-
-    pub fn missing_variable_name(span: Span) -> BolloxError {
+    pub fn missing_variable_name(span: impl Into<SourceSpan>) -> BolloxError {
         Self::MissingVariableName(MissingVariableName { span: span.into() }).into()
     }
 
-    pub fn unsupported_token_type(token: TokenType, span: Span) -> BolloxError {
+    pub fn unexpected_token(
+        expected: TokenType,
+        found: TokenType,
+        span: impl Into<SourceSpan>,
+    ) -> BolloxError {
+        Self::UnexpectedToken(UnexpectedTokenType {
+            expected,
+            found,
+            span: span.into(),
+        })
+        .into()
+    }
+
+    pub fn unsupported_token_type(token: TokenType, span: impl Into<SourceSpan>) -> BolloxError {
         Self::UnsupportedToken(UnsupportedTokenType {
             found: token,
             span: span.into(),

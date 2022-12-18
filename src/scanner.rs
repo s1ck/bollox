@@ -3,52 +3,9 @@ use std::{iter::Chain, str::CharIndices};
 use crate::{
     error::{BolloxError, ScanError},
     token::{Token, TokenType},
+    util::PeekPeekIterator,
     Result,
 };
-
-struct PeekPeekIterator<I: Iterator> {
-    iter: I,
-    peek_one: Option<Option<I::Item>>,
-    peek_two: Option<Option<I::Item>>,
-}
-
-impl<I: Iterator> PeekPeekIterator<I> {
-    fn new(iter: I) -> Self {
-        PeekPeekIterator {
-            iter,
-            peek_one: None,
-            peek_two: None,
-        }
-    }
-
-    fn peek(&mut self) -> Option<&I::Item> {
-        let iter = &mut self.iter;
-        self.peek_one.get_or_insert_with(|| iter.next()).as_ref()
-    }
-
-    fn peek_peek(&mut self) -> Option<&I::Item> {
-        self.peek();
-        let iter = &mut self.iter;
-        self.peek_two.get_or_insert_with(|| iter.next()).as_ref()
-    }
-}
-
-impl<I: Iterator> Iterator for PeekPeekIterator<I> {
-    type Item = I::Item;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.peek_one.take() {
-            Some(v) => {
-                self.peek_one = self.peek_two.take();
-                v
-            }
-            None => match self.peek_two.take() {
-                Some(v) => v,
-                None => self.iter.next(),
-            },
-        }
-    }
-}
 
 #[derive(Clone, Copy)]
 pub struct Source<'a> {
@@ -58,6 +15,10 @@ pub struct Source<'a> {
 impl<'a> Source<'a> {
     pub fn new(source: &'a str) -> Self {
         Source { source }
+    }
+
+    pub fn slice(&self, range: impl Into<std::ops::Range<usize>>) -> &'a str {
+        &self.source[range.into()]
     }
 }
 
@@ -112,7 +73,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn scan_token(&mut self) -> Option<Result<Token>> {
-        let token_type = match self.advance() {
+        let token_type = match self.advance()? {
             '(' => TokenType::LeftParen,
             ')' => TokenType::RightParen,
             '{' => TokenType::LeftBrace,
@@ -125,6 +86,7 @@ impl<'a> Scanner<'a> {
             '*' => TokenType::Star,
             '!' => {
                 if self.next_matches('=') {
+                    self.advance();
                     TokenType::BangEqual
                 } else {
                     TokenType::Bang
@@ -132,6 +94,7 @@ impl<'a> Scanner<'a> {
             }
             '=' => {
                 if self.next_matches('=') {
+                    self.advance();
                     TokenType::EqualEqual
                 } else {
                     TokenType::Equal
@@ -139,6 +102,7 @@ impl<'a> Scanner<'a> {
             }
             '<' => {
                 if self.next_matches('=') {
+                    self.advance();
                     TokenType::LessEqual
                 } else {
                     TokenType::Less
@@ -146,6 +110,7 @@ impl<'a> Scanner<'a> {
             }
             '>' => {
                 if self.next_matches('=') {
+                    self.advance();
                     TokenType::GreaterEqual
                 } else {
                     TokenType::Greater
@@ -153,9 +118,7 @@ impl<'a> Scanner<'a> {
             }
             '/' => {
                 if self.next_matches('/') {
-                    while self.peek() != '\n' && !self.is_at_end() {
-                        self.advance();
-                    }
+                    self.advance_while(|c| *c != '\n');
                     return None;
                 } else {
                     TokenType::Slash
@@ -186,15 +149,13 @@ impl<'a> Scanner<'a> {
     }
 
     fn identifier(&mut self) -> TokenType {
-        while self.peek().is_alphanumeric() {
-            self.advance();
-        }
+        self.advance_while(|c| c.is_alphanumeric());
         TokenType::from(&self.source.source[self.start..self.current])
     }
 
     fn string(&mut self) -> Result<Token> {
-        while self.peek() != '"' && !self.is_at_end() {
-            if self.peek() == '\n' {
+        while self.peek() != Some('"') && !self.is_at_end() {
+            if self.peek() == Some('\n') {
                 self.line += 1;
             }
             self.advance();
@@ -215,16 +176,14 @@ impl<'a> Scanner<'a> {
     }
 
     fn number(&mut self) -> Result<Token> {
-        while self.peek().is_ascii_digit() {
-            self.advance();
-        }
-        if self.peek() == '.' && self.peek_peek().is_ascii_digit() {
-            // Consume the '.'
-            self.advance();
+        self.advance_while(char::is_ascii_digit);
 
-            while self.peek().is_ascii_digit() {
+        match (self.peek(), self.peek_peek()) {
+            (Some('.'), Some(c)) if c.is_ascii_digit() => {
                 self.advance();
+                self.advance_while(char::is_ascii_digit);
             }
+            _ => {}
         }
 
         Ok(Token::new(
@@ -235,41 +194,43 @@ impl<'a> Scanner<'a> {
         ))
     }
 
-    fn peek(&mut self) -> char {
-        if let Some((_, c)) = self.chars.peek() {
-            *c
-        } else {
-            '\0'
-        }
+    fn peek(&mut self) -> Option<char> {
+        self.chars.peek().map(|(_, c)| *c)
     }
 
-    fn peek_peek(&mut self) -> char {
-        if let Some((_, c)) = self.chars.peek_peek() {
-            *c
-        } else {
-            '\0'
-        }
+    fn peek_peek(&mut self) -> Option<char> {
+        self.chars.peek_peek().map(|(_, c)| *c)
     }
 
-    fn advance(&mut self) -> char {
-        if let Some((idx, c)) = self.chars.next() {
+    fn advance(&mut self) -> Option<char> {
+        self.chars.next().map(|(idx, c)| {
             self.current = idx + 1;
             c
-        } else {
-            '\0'
+        })
+    }
+
+    fn advance_while<F>(&mut self, pred: F)
+    where
+        for<'c> F: Fn(&'c char) -> bool,
+    {
+        while let Some(c) = self.peek() {
+            if pred(&c) {
+                self.advance();
+            } else {
+                break;
+            }
         }
     }
 
     fn next_matches(&mut self, expected: char) -> bool {
-        if let Some((idx, next)) = self.chars.peek() {
-            if *next != expected {
-                return false;
-            } else {
+        match self.chars.peek() {
+            Some((_, c)) if *c != expected => false,
+            Some((idx, _)) => {
                 self.current = *idx;
-                return true;
+                true
             }
+            None => false,
         }
-        false
     }
 
     fn is_at_end(&mut self) -> bool {

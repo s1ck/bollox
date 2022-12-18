@@ -1,66 +1,57 @@
 use std::fmt::Display;
 
-use crate::token::{Range, Span};
+use crate::{node::Node, token::Span};
+
+pub type ExprNode<'a> = Node<Box<Expr<'a>>>;
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Stmt<'a> {
-    Block(Vec<Stmt<'a>>),
-    Expression(Expr<'a>),
-    Print(Expr<'a>),
-    Var(&'a str, Option<Expr<'a>>),
+pub enum Expr<'a> {
+    Unary {
+        op: UnaryOp,
+        expr: ExprNode<'a>,
+    },
+    Binary {
+        lhs: ExprNode<'a>,
+        op: BinaryOp,
+        rhs: ExprNode<'a>,
+    },
+    Group {
+        expr: ExprNode<'a>,
+    },
+    Literal {
+        lit: Literal<'a>,
+    },
+    Variable {
+        name: &'a str,
+    },
+    Assign {
+        name: &'a str,
+        expr: ExprNode<'a>,
+    },
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Expr<'a> {
-    pub node: Box<Node<'a>>,
-    pub span: Span,
-}
-
-impl<'a> Expr<'a> {
-    pub fn new(node: Box<Node<'a>>, span: Span) -> Self {
-        Self { node, span }
-    }
-
-    pub fn span(&self) -> Span {
-        self.span
-    }
-}
-
-impl<'a> FromIterator<Expr<'a>> for Option<Expr<'a>> {
-    fn from_iter<T: IntoIterator<Item = Expr<'a>>>(iter: T) -> Self {
+impl<'a> FromIterator<ExprNode<'a>> for Option<ExprNode<'a>> {
+    fn from_iter<T: IntoIterator<Item = ExprNode<'a>>>(iter: T) -> Self {
         iter.into_iter().next()
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Node<'a, T: Sized = Expr<'a>> {
-    Unary { op: UnaryOp, expr: T },
-    Binary { lhs: T, op: BinaryOp, rhs: T },
-    Group { expr: T },
-    Literal { lit: Literal<'a> },
-    Variable { name: &'a str },
-    Assign { name: &'a str, expr: T },
-}
-
-impl<'a> Node<'a> {
-    pub fn into_expr(self, range: Range) -> Expr<'a> {
-        Expr {
-            node: Box::new(self),
-            span: Span::from(range),
-        }
+impl<'a> Expr<'a> {
+    pub fn at(self, span: impl Into<Span>) -> ExprNode<'a> {
+        ExprNode::new(Box::new(self), span)
     }
 }
 
-impl<'a, T: Sized> Node<'a, T> {
-    pub fn unary(op: UnaryOp, expr: T) -> Self {
+impl<'a> Expr<'a> {
+    pub fn unary(op: UnaryOp, expr: ExprNode<'a>) -> Self {
         Self::Unary { op, expr }
     }
 
-    pub fn binary(lhs: T, op: BinaryOp, rhs: T) -> Self {
+    pub fn binary(lhs: ExprNode<'a>, op: BinaryOp, rhs: ExprNode<'a>) -> Self {
         Self::Binary { lhs, op, rhs }
     }
 
-    pub fn group(expr: T) -> Self {
+    pub fn group(expr: ExprNode<'a>) -> Self {
         Self::Group { expr }
     }
 
@@ -72,7 +63,7 @@ impl<'a, T: Sized> Node<'a, T> {
         Self::Variable { name }
     }
 
-    pub fn assign(name: &'a str, expr: T) -> Self {
+    pub fn assign(name: &'a str, expr: ExprNode<'a>) -> Self {
         Self::Assign { name, expr }
     }
 
@@ -102,21 +93,21 @@ impl<'a, T: Sized> Node<'a, T> {
         Self::Literal { lit: Literal::Nil }
     }
 
-    pub fn neg(expr: T) -> Self {
+    pub fn neg(expr: ExprNode<'a>) -> Self {
         Self::Unary {
             op: UnaryOp::Neg,
             expr,
         }
     }
 
-    pub fn not(expr: T) -> Self {
+    pub fn not(expr: ExprNode<'a>) -> Self {
         Self::Unary {
             op: UnaryOp::Not,
             expr,
         }
     }
 
-    pub fn equals(lhs: T, rhs: T) -> Self {
+    pub fn equals(lhs: ExprNode<'a>, rhs: ExprNode<'a>) -> Self {
         Self::Binary {
             lhs,
             op: BinaryOp::Equals,
@@ -124,7 +115,7 @@ impl<'a, T: Sized> Node<'a, T> {
         }
     }
 
-    pub fn not_equals(lhs: T, rhs: T) -> Self {
+    pub fn not_equals(lhs: ExprNode<'a>, rhs: ExprNode<'a>) -> Self {
         Self::Binary {
             lhs,
             op: BinaryOp::NotEquals,
@@ -132,7 +123,7 @@ impl<'a, T: Sized> Node<'a, T> {
         }
     }
 
-    pub fn less_than(lhs: T, rhs: T) -> Self {
+    pub fn less_than(lhs: ExprNode<'a>, rhs: ExprNode<'a>) -> Self {
         Self::Binary {
             lhs,
             op: BinaryOp::LessThan,
@@ -140,7 +131,7 @@ impl<'a, T: Sized> Node<'a, T> {
         }
     }
 
-    pub fn less_than_or_equal(lhs: T, rhs: T) -> Self {
+    pub fn less_than_or_equal(lhs: ExprNode<'a>, rhs: ExprNode<'a>) -> Self {
         Self::Binary {
             lhs,
             op: BinaryOp::LessThanOrEqual,
@@ -148,7 +139,7 @@ impl<'a, T: Sized> Node<'a, T> {
         }
     }
 
-    pub fn greater_than(lhs: T, rhs: T) -> Self {
+    pub fn greater_than(lhs: ExprNode<'a>, rhs: ExprNode<'a>) -> Self {
         Self::Binary {
             lhs,
             op: BinaryOp::GreaterThan,
@@ -156,7 +147,7 @@ impl<'a, T: Sized> Node<'a, T> {
         }
     }
 
-    pub fn greater_than_or_equal(lhs: T, rhs: T) -> Self {
+    pub fn greater_than_or_equal(lhs: ExprNode<'a>, rhs: ExprNode<'a>) -> Self {
         Self::Binary {
             lhs,
             op: BinaryOp::GreaterThanOrEqual,
@@ -164,7 +155,7 @@ impl<'a, T: Sized> Node<'a, T> {
         }
     }
 
-    pub fn add(lhs: T, rhs: T) -> Self {
+    pub fn add(lhs: ExprNode<'a>, rhs: ExprNode<'a>) -> Self {
         Self::Binary {
             lhs,
             op: BinaryOp::Add,
@@ -172,7 +163,7 @@ impl<'a, T: Sized> Node<'a, T> {
         }
     }
 
-    pub fn sub(lhs: T, rhs: T) -> Self {
+    pub fn sub(lhs: ExprNode<'a>, rhs: ExprNode<'a>) -> Self {
         Self::Binary {
             lhs,
             op: BinaryOp::Sub,
@@ -180,7 +171,7 @@ impl<'a, T: Sized> Node<'a, T> {
         }
     }
 
-    pub fn mul(lhs: T, rhs: T) -> Self {
+    pub fn mul(lhs: ExprNode<'a>, rhs: ExprNode<'a>) -> Self {
         Self::Binary {
             lhs,
             op: BinaryOp::Mul,
@@ -188,7 +179,7 @@ impl<'a, T: Sized> Node<'a, T> {
         }
     }
 
-    pub fn div(lhs: T, rhs: T) -> Self {
+    pub fn div(lhs: ExprNode<'a>, rhs: ExprNode<'a>) -> Self {
         Self::Binary {
             lhs,
             op: BinaryOp::Div,
@@ -307,60 +298,5 @@ impl Precedence for BinaryOp {
             BinaryOp::Mul => PrecedenceGroup::Factor,
             BinaryOp::Div => PrecedenceGroup::Factor,
         }
-    }
-}
-
-#[cfg(test)]
-fn print(expr: Expr, source: &str) -> String {
-    fn visit(expr: Expr, source: &str, res: &mut String) {
-        match *expr.node {
-            Node::Unary { op, expr } => parenthesize(source, op, Some(expr), res),
-            Node::Binary { lhs, op, rhs } => parenthesize(source, op, [lhs, rhs], res),
-            Node::Group { expr } => parenthesize(source, "group", Some(expr), res),
-            Node::Literal { lit: _ } => res.push_str(&source[Range::from(expr.span)]),
-            Node::Variable { name: _ } => res.push_str(&source[Range::from(expr.span)]),
-            Node::Assign { name: _, expr } => parenthesize(source, "=", Some(expr), res),
-        }
-    }
-
-    fn parenthesize<'a>(
-        source: &'a str,
-        name: impl Display,
-        exprs: impl IntoIterator<Item = Expr<'a>>,
-        res: &mut String,
-    ) {
-        use std::fmt::Write;
-
-        res.push('(');
-        write!(res, "{name}").unwrap();
-
-        for expr in exprs {
-            res.push(' ');
-            visit(expr, source, res);
-        }
-
-        res.push(')');
-    }
-
-    let mut res = String::new();
-    visit(expr, source, &mut res);
-    res
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_print() {
-        let input = "-123 * (45.67)";
-
-        let num = Node::number(123_f64).into_expr(1..4);
-        let neg = Node::neg(num).into_expr(0..4);
-        let num = Node::number(45.67).into_expr(8..13);
-        let grp = Node::group(num).into_expr(7..14);
-        let ast = Node::mul(neg, grp).into_expr(0..14);
-
-        assert_eq!(print(ast, input), "(* (- 123) (group 45.67))");
     }
 }

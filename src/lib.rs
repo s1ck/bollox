@@ -1,23 +1,22 @@
-#![allow(dead_code)]
-
 pub mod error;
 pub mod token;
 
-mod ast;
 mod env;
+mod expr;
 mod interp;
+mod node;
 mod parser;
 mod scanner;
+mod stmt;
+mod util;
 mod value;
 
+use crate::parser::parser;
+use error::{BolloxError, BolloxErrors};
+use interp::interpreter;
 use std::cell::Cell;
 
-use error::{BolloxError, BolloxErrors};
-
-use interp::interpreter;
 pub use scanner::Source;
-
-use crate::parser::parser;
 
 pub(crate) type Result<T> = std::result::Result<T, BolloxError>;
 
