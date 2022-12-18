@@ -59,6 +59,10 @@ impl<'a> Source<'a> {
     pub fn new(source: &'a str) -> Self {
         Source { source }
     }
+
+    pub fn slice(&self, range: impl Into<std::ops::Range<usize>>) -> &'a str {
+        &self.source[range.into()]
+    }
 }
 
 impl<'a> IntoIterator for Source<'a> {

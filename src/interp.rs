@@ -41,7 +41,7 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
                     Some(expr) => self.eval_expr(expr)?,
                     None => Value::Nil,
                 };
-                self.environment.borrow_mut().define(name, value);
+                self.environment.borrow_mut().define(name.item, value);
                 Ok(())
             }
             Stmt::Block(stmts) => {
