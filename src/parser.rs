@@ -344,7 +344,7 @@ mod tests {
         let num0 = Expr::number(4_f64).at(0..1);
         let num1 = Expr::number(2_f64).at(4..5);
         let expr = Expr::add(num0, num1).at(0..5);
-        let expected = Stmt::expression(expr).at(0..5);
+        let expected = Stmt::expression(expr).at(0..6);
 
         assert_eq!(actual, Some(expected));
 

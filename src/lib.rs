@@ -8,6 +8,7 @@ mod node;
 mod parser;
 mod scanner;
 mod stmt;
+mod util;
 mod value;
 
 use crate::parser::parser;
