@@ -125,6 +125,7 @@ impl<'a> Scanner<'a> {
             '*' => TokenType::Star,
             '!' => {
                 if self.next_matches('=') {
+                    self.advance();
                     TokenType::BangEqual
                 } else {
                     TokenType::Bang
@@ -132,6 +133,7 @@ impl<'a> Scanner<'a> {
             }
             '=' => {
                 if self.next_matches('=') {
+                    self.advance();
                     TokenType::EqualEqual
                 } else {
                     TokenType::Equal
@@ -139,6 +141,7 @@ impl<'a> Scanner<'a> {
             }
             '<' => {
                 if self.next_matches('=') {
+                    self.advance();
                     TokenType::LessEqual
                 } else {
                     TokenType::Less
@@ -146,6 +149,7 @@ impl<'a> Scanner<'a> {
             }
             '>' => {
                 if self.next_matches('=') {
+                    self.advance();
                     TokenType::GreaterEqual
                 } else {
                     TokenType::Greater

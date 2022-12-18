@@ -3,11 +3,13 @@
 pub mod error;
 pub mod token;
 
-mod ast;
 mod env;
+mod expr;
 mod interp;
+mod node;
 mod parser;
 mod scanner;
+mod stmt;
 mod value;
 
 use std::cell::Cell;

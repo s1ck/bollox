@@ -2,7 +2,7 @@ use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
 use crate::{
-    ast::BinaryOp,
+    expr::BinaryOp,
     token::{Span, TokenType},
     value::Value,
 };
@@ -157,19 +157,19 @@ pub struct InvalidAssignmentTarget {
 }
 
 impl SyntaxError {
-    pub fn missing_closing_parenthesis(span: Span) -> BolloxError {
+    pub fn missing_closing_parenthesis(span: impl Into<SourceSpan>) -> BolloxError {
         Self::MissingClosingParenthesis(MissingClosingParenthesis { span: span.into() }).into()
     }
 
-    pub fn missing_semicolon(span: Span) -> BolloxError {
+    pub fn missing_semicolon(span: impl Into<SourceSpan>) -> BolloxError {
         Self::MissingSemicolon(MissingSemicolon { span: span.into() }).into()
     }
 
-    pub fn missing_variable_name(span: Span) -> BolloxError {
+    pub fn missing_variable_name(span: impl Into<SourceSpan>) -> BolloxError {
         Self::MissingVariableName(MissingVariableName { span: span.into() }).into()
     }
 
-    pub fn unsupported_token_type(token: TokenType, span: Span) -> BolloxError {
+    pub fn unsupported_token_type(token: TokenType, span: impl Into<SourceSpan>) -> BolloxError {
         Self::UnsupportedToken(UnsupportedTokenType {
             found: token,
             span: span.into(),

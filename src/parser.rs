@@ -1,8 +1,9 @@
 use std::{iter::Peekable, ops::Range};
 
 use crate::{
-    ast::{BinaryOp, Expr, Literal, Node, Stmt, UnaryOp},
     error::{BolloxError, SyntaxError},
+    expr::{BinaryOp, Expr, ExprNode, Literal, UnaryOp},
+    stmt::{Stmt, StmtNode},
     token::{Span, Token, TokenType},
     Result, Source,
 };
@@ -42,7 +43,7 @@ pub struct Parser<'a, I: Iterator<Item = Tok>> {
 impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     // program     -> declaration* EOF ;
     // declaration -> var_decl | statement ;
-    fn declaration(&mut self) -> Result<Stmt<'a>> {
+    fn declaration(&mut self) -> Result<StmtNode<'a>> {
         let res = match self.tokens.peek() {
             Some(&(Var, _)) => self.var_decl(),
             _ => self.statement(),
@@ -57,7 +58,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         }
     }
     // var_decl -> "var" IDENTIFER ( "=" expression )? ";" ;
-    fn var_decl(&mut self) -> Result<Stmt<'a>> {
+    fn var_decl(&mut self) -> Result<StmtNode<'a>> {
         let (_, var_span) = self.tokens.next().unwrap(); // consume VAR token
         let (name, name_span) = match self.tokens.next() {
             Some((Identifier, span)) => (&self.source.source[Range::<usize>::from(span)], span),
@@ -71,7 +72,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             _ => None,
         };
         match self.tokens.next() {
-            Some((Semicolon, _)) => Ok(Stmt::Var(name, initializer)),
+            Some((Semicolon, _)) => Ok(Stmt::var(name, initializer).at(var_span)),
             _ => Err(SyntaxError::missing_semicolon(
                 initializer
                     .map(|e| e.span)
@@ -80,41 +81,42 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         }
     }
     // statement -> expr_stmt | print_stmt | block_stmt ;
-    fn statement(&mut self) -> Result<Stmt<'a>> {
+    fn statement(&mut self) -> Result<StmtNode<'a>> {
         match self.tokens.peek() {
             Some(&(Print, _)) => self.print_stmt(),
             Some(&(LeftBrace, span)) => self.block_stmt(span),
-            Some(&(If, span)) => self.if_stmt(),
+            Some(&(If, _)) => self.if_stmt(),
             _ => self.expr_stmt(),
         }
     }
     // expr_stmt -> expression ";" ;
-    fn expr_stmt(&mut self) -> Result<Stmt<'a>> {
+    fn expr_stmt(&mut self) -> Result<StmtNode<'a>> {
         let expr = self.expression()?;
+        let span = expr.span;
         match self.tokens.next() {
-            Some((Semicolon, _)) => Ok(Stmt::Expression(expr)),
-            _ => Err(SyntaxError::missing_semicolon(expr.span)),
+            Some((Semicolon, _)) => Ok(Stmt::expression(expr).at(span)),
+            _ => Err(SyntaxError::missing_semicolon(span)),
         }
     }
     // print_stmt -> "print" expression ";" ;
-    fn print_stmt(&mut self) -> Result<Stmt<'a>> {
+    fn print_stmt(&mut self) -> Result<StmtNode<'a>> {
         let _ = self.tokens.next(); // consume PRINT token
         let expr = self.expression()?;
+        let span = expr.span;
         match self.tokens.next() {
-            Some((Semicolon, _)) => Ok(Stmt::Print(expr)),
-            _ => Err(SyntaxError::missing_semicolon(expr.span)),
+            Some((Semicolon, _)) => Ok(Stmt::print(expr).at(span)),
+            _ => Err(SyntaxError::missing_semicolon(span)),
         }
     }
     // block_stmt -> "{" declaration* "}"
-    fn block_stmt(&mut self, start: Span) -> Result<Stmt<'a>> {
+    fn block_stmt(&mut self, start: Span) -> Result<StmtNode<'a>> {
         let _ = self.tokens.next(); // consume { token
         let mut stmts = Vec::new();
-
-        let stmts = loop {
+        let end = loop {
             match self.tokens.peek() {
-                Some(&(RightBrace, _)) => {
-                    let _ = self.tokens.next();
-                    break stmts;
+                Some(&(RightBrace, span)) => {
+                    let _ = self.tokens.next(); // consume } token
+                    break span;
                 }
                 None | Some(&(Eof, _)) => {
                     return Err(SyntaxError::missing_closing_parenthesis(start))
@@ -123,13 +125,13 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             }
         };
 
-        Ok(Stmt::Block(stmts))
+        Ok(Stmt::block(stmts).at(start.union(end)))
     }
     // if_stmt -> "if" "(" expression ")" statement ( "else" statement )? ;
-    fn if_stmt(&mut self) -> Result<Stmt<'a>> {
+    fn if_stmt(&mut self) -> Result<StmtNode<'a>> {
         let _ = self.tokens.next(); // consume If token
 
-        let condition = match self.tokens.peek() {
+        let cond = match self.tokens.peek() {
             Some(&(LeftParen, _)) => {
                 let _ = self.tokens.next(); // consume ( token
                 self.expression()?
@@ -139,38 +141,42 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
 
         match self.tokens.peek() {
             Some(&(RightParen, _)) => {
-                let _ = self.tokens.next();
+                let _ = self.tokens.next(); // consume ) token
             }
             _ => todo!("error"),
         }
 
-        let then_branch = self.statement()?;
-        let else_branch = match self.tokens.peek() {
+        let then_ = self.statement()?;
+
+        match self.tokens.peek() {
             Some(&(Else, _)) => {
                 let _ = self.tokens.next(); // consume Else token
-                Some(Box::new(self.statement()?))
+                let else_ = self.statement()?;
+                let span = cond.span.union(else_.span);
+                Ok(Stmt::if_else(cond, then_, else_).at(span))
             }
-            _ => None,
-        };
-
-        Ok(Stmt::If(condition, Box::new(then_branch), else_branch))
+            _ => {
+                let span = cond.span.union(then_.span);
+                Ok(Stmt::if_(cond, then_).at(span))
+            }
+        }
     }
 
     // expression → assignment ;
-    fn expression(&mut self) -> Result<Expr<'a>> {
+    fn expression(&mut self) -> Result<ExprNode<'a>> {
         self.assignment()
     }
     // assignment -> IDENTIFIER "=" assignment | equality ;
-    fn assignment(&mut self) -> Result<Expr<'a>> {
+    fn assignment(&mut self) -> Result<ExprNode<'a>> {
         let lhs = self.equality()?;
         if let Some(&(Equal, eq_span)) = self.tokens.peek() {
             let _ = self.tokens.next();
             let rhs = self.assignment()?;
             // if lhs is a variable, we got an assignment
-            return match *lhs.node {
-                Node::Variable { name } => {
-                    let range = lhs.span().union(rhs.span());
-                    Ok(Node::assign(name, rhs).into_expr(range))
+            return match *lhs.item {
+                Expr::Variable { name } => {
+                    let range = lhs.span.union(rhs.span);
+                    Ok(Expr::assign(name, rhs).at(range))
                 }
                 _ => Err(SyntaxError::invalid_assignment_target(eq_span)),
             };
@@ -179,7 +185,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         Ok(lhs)
     }
     // equality   → comparison ( ( "!=" | "==" ) comparison )* ;
-    fn equality(&mut self) -> Result<Expr<'a>> {
+    fn equality(&mut self) -> Result<ExprNode<'a>> {
         let mut lhs = self.comparison()?;
         loop {
             let op = match self.tokens.peek() {
@@ -189,13 +195,13 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             };
             let _ = self.tokens.next();
             let rhs = self.comparison()?;
-            let range = lhs.span().union(rhs.span());
-            lhs = Node::binary(lhs, op, rhs).into_expr(range);
+            let range = lhs.span.union(rhs.span);
+            lhs = Expr::binary(lhs, op, rhs).at(range);
         }
         Ok(lhs)
     }
     // comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-    fn comparison(&mut self) -> Result<Expr<'a>> {
+    fn comparison(&mut self) -> Result<ExprNode<'a>> {
         let mut lhs = self.term()?;
         loop {
             let op = match self.tokens.peek() {
@@ -207,13 +213,13 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             };
             let _ = self.tokens.next();
             let rhs = self.term()?;
-            let range = lhs.span().union(rhs.span());
-            lhs = Node::binary(lhs, op, rhs).into_expr(range);
+            let range = lhs.span.union(rhs.span);
+            lhs = Expr::binary(lhs, op, rhs).at(range);
         }
         Ok(lhs)
     }
     // term       → factor ( ( "-" | "+" ) factor )* ;
-    fn term(&mut self) -> Result<Expr<'a>> {
+    fn term(&mut self) -> Result<ExprNode<'a>> {
         let mut lhs = self.factor()?;
         loop {
             let op = match self.tokens.peek() {
@@ -223,13 +229,13 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             };
             let _ = self.tokens.next();
             let rhs = self.factor()?;
-            let range = lhs.span().union(rhs.span());
-            lhs = Node::binary(lhs, op, rhs).into_expr(range);
+            let range = lhs.span.union(rhs.span);
+            lhs = Expr::binary(lhs, op, rhs).at(range);
         }
         Ok(lhs)
     }
     // factor     → unary ( ( "/" | "*" ) unary )* ;
-    fn factor(&mut self) -> Result<Expr<'a>> {
+    fn factor(&mut self) -> Result<ExprNode<'a>> {
         let mut lhs = self.unary()?;
         loop {
             let op = match self.tokens.peek() {
@@ -239,13 +245,13 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             };
             let _ = self.tokens.next();
             let rhs = self.unary()?;
-            let range = lhs.span().union(rhs.span());
-            lhs = Node::binary(lhs, op, rhs).into_expr(range);
+            let range = lhs.span.union(rhs.span);
+            lhs = Expr::binary(lhs, op, rhs).at(range);
         }
         Ok(lhs)
     }
     // unary      → ( "!" | "-" ) unary | primary ;
-    fn unary(&mut self) -> Result<Expr<'a>> {
+    fn unary(&mut self) -> Result<ExprNode<'a>> {
         let (op, span) = match self.tokens.peek() {
             Some(&(Bang, span)) => (UnaryOp::Not, span),
             Some(&(Minus, span)) => (UnaryOp::Neg, span),
@@ -253,48 +259,48 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         };
         let _ = self.tokens.next();
         let inner = self.unary()?;
-        let range = span.union(inner.span());
-        Ok(Node::unary(op, inner).into_expr(range))
+        let range = span.union(inner.span);
+        Ok(Expr::unary(op, inner).at(range))
     }
     // primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
-    fn primary(&mut self) -> Result<Expr<'a>> {
-        let (node, span): (Node<Expr<'a>>, _) = match self.tokens.next() {
-            Some((False, span)) => (Node::fals(), span),
-            Some((True, span)) => (Node::tru(), span),
-            Some((Nil, span)) => (Node::nil(), span),
+    fn primary(&mut self) -> Result<ExprNode<'a>> {
+        let (node, span) = match self.tokens.next() {
+            Some((False, span)) => (Expr::fals(), span),
+            Some((True, span)) => (Expr::tru(), span),
+            Some((Nil, span)) => (Expr::nil(), span),
             Some((Number, span)) => {
                 let value = &self.source.source[Range::<usize>::from(span)];
                 let value = value.parse::<f64>().unwrap();
                 let value = Literal::Number(value);
-                (Node::literal(value), span)
+                (Expr::literal(value), span)
             }
             Some((String, span)) => {
                 let value = &self.source.source[Range::<usize>::from(span)];
                 let value = Literal::String(value);
-                (Node::literal(value), span)
+                (Expr::literal(value), span)
             }
             Some((LeftParen, span)) => {
                 let expr = self.expression()?;
-                let span = span.union(expr.span());
+                let span = span.union(expr.span);
 
                 match self.tokens.next() {
                     Some((RightParen, r_span)) => {
-                        let span = r_span.union(span.into());
-                        (Node::group(expr), span.into())
+                        let span = r_span.union(span);
+                        (Expr::group(expr), span.into())
                     }
-                    _ => return Err(SyntaxError::missing_closing_parenthesis(span.into())),
+                    _ => return Err(SyntaxError::missing_closing_parenthesis(span)),
                 }
             }
             Some((Identifier, span)) => {
                 let value = &self.source.source[Range::<usize>::from(span)];
-                (Node::variable(value), span)
+                (Expr::variable(value), span)
             }
 
             Some((token, span)) => return Err(SyntaxError::unsupported_token_type(token, span)),
             None => return Err(SyntaxError::unexpected_eoi()),
         };
 
-        Ok(node.into_expr(span.into()))
+        Ok(node.at(span))
     }
 }
 
@@ -317,7 +323,7 @@ impl<I: Iterator<Item = Tok>> Parser<'_, I> {
 }
 
 impl<'a, I: Iterator<Item = Tok>> Iterator for Parser<'a, I> {
-    type Item = Result<Stmt<'a>>;
+    type Item = Result<StmtNode<'a>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(&(Eof, _)) | None = self.tokens.peek() {
@@ -344,19 +350,19 @@ mod tests {
             .collect::<Vec<_>>();
 
         let parser = parser(source, tokens);
-        let expres = parser
+        let actual = parser
             .filter_map(|e| match e {
                 Ok(e) => Some(e),
                 _ => None,
             })
-            .collect::<Vec<Stmt>>();
+            .collect::<Option<StmtNode<'_>>>();
 
-        let num0 = Node::number(4_f64).into_expr(0..1);
-        let num1 = Node::number(2_f64).into_expr(4..5);
-        let expr = Node::add(num0, num1).into_expr(0..5);
-        let stmt = Stmt::Expression(expr);
+        let num0 = Expr::number(4_f64).at(0..1);
+        let num1 = Expr::number(2_f64).at(4..5);
+        let expr = Expr::add(num0, num1).at(0..5);
+        let expected = Stmt::expression(expr).at(0..5);
 
-        assert_eq!(expres[0], stmt);
+        assert_eq!(actual, Some(expected));
 
         Ok(())
     }
