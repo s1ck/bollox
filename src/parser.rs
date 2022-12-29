@@ -59,7 +59,7 @@ macro_rules! peek {
 }
 
 macro_rules! bin_op {
-    ($this:ident, $descent:ident, { $($pat:pat => $expr:expr),+ $(,)? }) => {{
+    ($this:ident, $descent:ident, $construct:expr, { $($pat:pat => $expr:expr),+ $(,)? }) => {{
         let mut lhs = $this.$descent()?;
         loop {
             let op = match peek!($this, { $($pat => $expr),+ }) {
@@ -68,23 +68,7 @@ macro_rules! bin_op {
             };
             let rhs = $this.$descent()?;
             let span = lhs.span.union(rhs.span);
-            lhs = Expr::binary(lhs, op, rhs).at(span);
-        }
-        Ok(lhs)
-    }};
-}
-
-macro_rules! logical_op {
-    ($this:ident, $descent:ident, { $($pat:pat => $expr:expr),+ $(,)? }) => {{
-        let mut lhs = $this.$descent()?;
-        loop {
-            let op = match peek!($this, { $($pat => $expr),+ }) {
-                Some(op) => op,
-                None => break,
-            };
-            let rhs = $this.$descent()?;
-            let span = lhs.span.union(rhs.span);
-            lhs = Expr::logical(lhs, op, rhs).at(span);
+            lhs = $construct(lhs, op, rhs).at(span);
         }
         Ok(lhs)
     }};
@@ -193,7 +177,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     }
     // assignment -> IDENTIFIER "=" assignment | logic_or ;
     fn assignment(&mut self) -> Result<ExprNode<'a>> {
-        let lhs = self.or()?;
+        let lhs = self.logic_or()?;
 
         if peek!(self, Equal) {
             let assignment = self.assignment()?;
@@ -209,28 +193,28 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         Ok(lhs)
     }
     // logic_or -> logic_and ( "or" logic_and )* ;
-    fn or(&mut self) -> Result<ExprNode<'a>> {
-        logical_op!(self, and, {
+    fn logic_or(&mut self) -> Result<ExprNode<'a>> {
+        bin_op!(self, logic_and, Expr::logical, {
             (Or, _) => LogicalOp::Or,
         })
     }
     // logic_and -> equality ( "and" equality )* ;
-    fn and(&mut self) -> Result<ExprNode<'a>> {
-        logical_op!(self, equality, {
+    fn logic_and(&mut self) -> Result<ExprNode<'a>> {
+        bin_op!(self, equality, Expr::logical, {
             (And, _) => LogicalOp::And,
         })
     }
 
     // equality -> comparison ( ( "!=" | "==" ) comparison )* ;
     fn equality(&mut self) -> Result<ExprNode<'a>> {
-        bin_op!(self, comparison, {
+        bin_op!(self, comparison, Expr::binary, {
             (BangEqual, _) => BinaryOp::NotEquals,
             (EqualEqual, _) => BinaryOp::Equals,
         })
     }
     // comparison -> term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
     fn comparison(&mut self) -> Result<ExprNode<'a>> {
-        bin_op!(self, term, {
+        bin_op!(self, term, Expr::binary, {
             (Greater, _) => BinaryOp::GreaterThan,
             (GreaterEqual, _) => BinaryOp::GreaterThanOrEqual,
             (Less, _) => BinaryOp::LessThan,
@@ -239,14 +223,14 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     }
     // term -> factor ( ( "-" | "+" ) factor )* ;
     fn term(&mut self) -> Result<ExprNode<'a>> {
-        bin_op!(self, factor, {
+        bin_op!(self, factor, Expr::binary, {
             (Minus, _) => BinaryOp::Sub,
             (Plus, _) => BinaryOp::Add,
         })
     }
     // factor -> unary ( ( "/" | "*" ) unary )* ;
     fn factor(&mut self) -> Result<ExprNode<'a>> {
-        bin_op!(self, unary, {
+        bin_op!(self, unary, Expr::binary, {
             (Slash, _) => BinaryOp::Div,
             (Star, _) => BinaryOp::Mul,
         })
