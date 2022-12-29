@@ -1,7 +1,7 @@
 use crate::{
     env::{Environment, EnvironmentRef},
     error::SyntaxError,
-    expr::{BinaryOp, Expr, ExprNode, UnaryOp},
+    expr::{BinaryOp, Expr, ExprNode, LogicalOp, UnaryOp},
     stmt::{Stmt, StmtNode},
     value::Value,
     Result,
@@ -49,8 +49,7 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
                 self.eval_block(stmts, new_env.into())
             }
             Stmt::If(condition, then_branch, else_branch) => {
-                let condition_span = condition.span;
-                if self.eval_expr(condition)?.as_bool(condition_span)? {
+                if self.eval_expr(condition)?.as_bool()? {
                     self.eval_stmt(then_branch)?
                 } else if let Some(else_branch) = else_branch {
                     self.eval_stmt(else_branch)?
@@ -95,7 +94,7 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
                 let val = self.eval_expr(expr)?;
                 match op {
                     UnaryOp::Neg => val.neg(span)?,
-                    UnaryOp::Not => val.not(span)?,
+                    UnaryOp::Not => val.not()?,
                 }
             }
             Expr::Binary { lhs, op, rhs } => {
@@ -112,6 +111,14 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
                     BinaryOp::Sub => lhs_val.sub(&rhs_val, span)?,
                     BinaryOp::Mul => lhs_val.mul(&rhs_val, span)?,
                     BinaryOp::Div => lhs_val.div(&rhs_val, span)?,
+                }
+            }
+            Expr::Logical { lhs, op, rhs } => {
+                let lhs_val = self.eval_expr(lhs)?;
+                match op {
+                    LogicalOp::Or if lhs_val.as_bool()? => lhs_val,
+                    LogicalOp::And if !lhs_val.as_bool()? => lhs_val,
+                    _ => self.eval_expr(rhs)?,
                 }
             }
         };

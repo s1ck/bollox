@@ -41,8 +41,8 @@ impl Display for Value {
     }
 }
 impl Value {
-    pub(crate) fn not(&self, span: Span) -> Result<Self> {
-        let b = self.as_bool(span)?;
+    pub(crate) fn not(&self) -> Result<Self> {
+        let b = self.as_bool()?;
         Ok((!b).into())
     }
 
@@ -132,7 +132,7 @@ impl Value {
             .into())
     }
 
-    pub(crate) fn as_bool(&self, _span: Span) -> Result<bool> {
+    pub(crate) fn as_bool(&self) -> Result<bool> {
         Ok(match self {
             Value::Boolean(b) => *b,
             Value::Nil => false,

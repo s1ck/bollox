@@ -2,7 +2,7 @@ use std::iter::Peekable;
 
 use crate::{
     error::{BolloxError, SyntaxError},
-    expr::{BinaryOp, Expr, ExprNode, Literal, UnaryOp},
+    expr::{BinaryOp, Expr, ExprNode, Literal, LogicalOp, UnaryOp},
     node::Node,
     stmt::{Stmt, StmtNode},
     token::{Span, Token, TokenType},
@@ -73,6 +73,23 @@ macro_rules! bin_op {
         Ok(lhs)
     }};
 }
+
+macro_rules! logical_op {
+    ($this:ident, $descent:ident, { $($pat:pat => $expr:expr),+ $(,)? }) => {{
+        let mut lhs = $this.$descent()?;
+        loop {
+            let op = match peek!($this, { $($pat => $expr),+ }) {
+                Some(op) => op,
+                None => break,
+            };
+            let rhs = $this.$descent()?;
+            let span = lhs.span.union(rhs.span);
+            lhs = Expr::logical(lhs, op, rhs).at(span);
+        }
+        Ok(lhs)
+    }};
+}
+
 pub struct Parser<'a, I: Iterator<Item = Tok>> {
     source: Source<'a>,
     tokens: Peekable<I>,
@@ -170,35 +187,48 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         }
     }
 
-    // expression → assignment ;
+    // expression ->assignment ;
     fn expression(&mut self) -> Result<ExprNode<'a>> {
         self.assignment()
     }
-    // assignment -> IDENTIFIER "=" assignment | equality ;
+    // assignment -> IDENTIFIER "=" assignment | logic_or ;
     fn assignment(&mut self) -> Result<ExprNode<'a>> {
-        let ident = self.equality()?;
+        let lhs = self.or()?;
 
         if peek!(self, Equal) {
             let assignment = self.assignment()?;
-            return match *ident.item {
+            return match *lhs.item {
                 Expr::Variable { name } => {
-                    let range = ident.span.union(assignment.span);
+                    let range = lhs.span.union(assignment.span);
                     Ok(Expr::assign(name, assignment).at(range))
                 }
-                _ => Err(SyntaxError::invalid_assignment_target(ident.span)),
+                _ => Err(SyntaxError::invalid_assignment_target(lhs.span)),
             };
         }
 
-        Ok(ident)
+        Ok(lhs)
     }
-    // equality   → comparison ( ( "!=" | "==" ) comparison )* ;
+    // logic_or -> logic_and ( "or" logic_and )* ;
+    fn or(&mut self) -> Result<ExprNode<'a>> {
+        logical_op!(self, and, {
+            (Or, _) => LogicalOp::Or,
+        })
+    }
+    // logic_and -> equality ( "and" equality )* ;
+    fn and(&mut self) -> Result<ExprNode<'a>> {
+        logical_op!(self, equality, {
+            (And, _) => LogicalOp::And,
+        })
+    }
+
+    // equality -> comparison ( ( "!=" | "==" ) comparison )* ;
     fn equality(&mut self) -> Result<ExprNode<'a>> {
         bin_op!(self, comparison, {
             (BangEqual, _) => BinaryOp::NotEquals,
             (EqualEqual, _) => BinaryOp::Equals,
         })
     }
-    // comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+    // comparison -> term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
     fn comparison(&mut self) -> Result<ExprNode<'a>> {
         bin_op!(self, term, {
             (Greater, _) => BinaryOp::GreaterThan,
@@ -207,21 +237,21 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             (LessEqual, _) => BinaryOp::LessThanOrEqual,
         })
     }
-    // term       → factor ( ( "-" | "+" ) factor )* ;
+    // term -> factor ( ( "-" | "+" ) factor )* ;
     fn term(&mut self) -> Result<ExprNode<'a>> {
         bin_op!(self, factor, {
             (Minus, _) => BinaryOp::Sub,
             (Plus, _) => BinaryOp::Add,
         })
     }
-    // factor     → unary ( ( "/" | "*" ) unary )* ;
+    // factor -> unary ( ( "/" | "*" ) unary )* ;
     fn factor(&mut self) -> Result<ExprNode<'a>> {
         bin_op!(self, unary, {
             (Slash, _) => BinaryOp::Div,
             (Star, _) => BinaryOp::Mul,
         })
     }
-    // unary      → ( "!" | "-" ) unary | primary ;
+    // unary -> ( "!" | "-" ) unary | primary ;
     fn unary(&mut self) -> Result<ExprNode<'a>> {
         let (op, span) = match self.tokens.peek() {
             Some(&(Bang, span)) => (UnaryOp::Not, span),
@@ -233,7 +263,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         let range = span.union(inner.span);
         Ok(Expr::unary(op, inner).at(range))
     }
-    // primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
+    // primary -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
     fn primary(&mut self) -> Result<ExprNode<'a>> {
         let (node, span) = match self.tokens.next() {
             Some((False, span)) => (Expr::fals(), span),

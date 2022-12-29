@@ -15,6 +15,11 @@ pub enum Expr<'a> {
         op: BinaryOp,
         rhs: ExprNode<'a>,
     },
+    Logical {
+        lhs: ExprNode<'a>,
+        op: LogicalOp,
+        rhs: ExprNode<'a>,
+    },
     Group {
         expr: ExprNode<'a>,
     },
@@ -49,6 +54,10 @@ impl<'a> Expr<'a> {
 
     pub fn binary(lhs: ExprNode<'a>, op: BinaryOp, rhs: ExprNode<'a>) -> Self {
         Self::Binary { lhs, op, rhs }
+    }
+
+    pub fn logical(lhs: ExprNode<'a>, op: LogicalOp, rhs: ExprNode<'a>) -> Self {
+        Self::Logical { lhs, op, rhs }
     }
 
     pub fn group(expr: ExprNode<'a>) -> Self {
@@ -208,6 +217,12 @@ pub enum BinaryOp {
     Div,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum LogicalOp {
+    And,
+    Or,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Literal<'a> {
     String(&'a str),
@@ -239,6 +254,15 @@ impl Display for BinaryOp {
             Self::Sub => f.write_str("-"),
             Self::Mul => f.write_str("*"),
             Self::Div => f.write_str("/"),
+        }
+    }
+}
+
+impl Display for LogicalOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogicalOp::And => f.write_str("and"),
+            LogicalOp::Or => f.write_str("or"),
         }
     }
 }
