@@ -9,6 +9,7 @@ pub enum Stmt<'a> {
     Print(ExprNode<'a>),
     Var(Node<&'a str>, Option<ExprNode<'a>>),
     If(ExprNode<'a>, StmtNode<'a>, Option<StmtNode<'a>>),
+    While(ExprNode<'a>, StmtNode<'a>),
 }
 
 impl<'a> Stmt<'a> {
@@ -46,5 +47,9 @@ impl<'a> Stmt<'a> {
 
     pub fn if_else(condition: ExprNode<'a>, then_: StmtNode<'a>, else_: StmtNode<'a>) -> Self {
         Self::If(condition, then_, Some(else_))
+    }
+
+    pub fn while_(condition: ExprNode<'a>, stmt: StmtNode<'a>) -> Self {
+        Self::While(condition, stmt)
     }
 }

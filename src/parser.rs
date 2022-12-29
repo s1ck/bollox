@@ -106,12 +106,13 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         let end = self.expect(Semicolon)?;
         Ok(Stmt::var(ident, init).at(var_span.union(end)))
     }
-    // statement -> expr_stmt | print_stmt | block_stmt ;
+    // statement -> expr_stmt | print_stmt | block_stmt | if_stmt | while_stmt ;
     fn statement(&mut self) -> Result<StmtNode<'a>> {
         let stmt = peek!(self, {
             (Print, span) => self.print_stmt(span),
             (LeftBrace, span) => self.block_stmt(span),
             (If, span) => self.if_stmt(span),
+            (While, span) => self.while_stmt(span),
         });
         match stmt {
             Some(Ok(stmt)) => Ok(stmt),
@@ -170,8 +171,16 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             }
         }
     }
-
-    // expression ->assignment ;
+    // while_stmt -> "while" "(" expression ")" statement ;
+    fn while_stmt(&mut self, while_span: Span) -> Result<StmtNode<'a>> {
+        self.expect(LeftParen)?;
+        let cond = self.expression()?;
+        self.expect(RightParen)?;
+        let stmt = self.statement()?;
+        let span = while_span.union(stmt.span);
+        Ok(Stmt::while_(cond, stmt).at(span))
+    }
+    // expression -> assignment ;
     fn expression(&mut self) -> Result<ExprNode<'a>> {
         self.assignment()
     }

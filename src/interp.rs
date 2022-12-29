@@ -29,8 +29,8 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
 }
 
 impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
-    fn eval_stmt(&mut self, stmt: StmtNode<'a>) -> Result<()> {
-        match *stmt.item {
+    fn eval_stmt(&mut self, stmt: &StmtNode<'a>) -> Result<()> {
+        match &*stmt.item {
             Stmt::Expression(expr) => self.eval_expr(expr).map(|_| Ok(()))?,
             Stmt::Print(expr) => self.eval_expr(expr).map(|v| {
                 println!("{v}");
@@ -56,13 +56,19 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
                 }
                 Ok(())
             }
+            Stmt::While(condition, statement) => {
+                while self.eval_expr(condition)?.as_bool()? {
+                    self.eval_stmt(statement)?
+                }
+                Ok(())
+            }
         }
     }
 
-    fn eval_block(&mut self, stmts: Vec<StmtNode<'a>>, env: EnvironmentRef<'a>) -> Result<()> {
+    fn eval_block(&mut self, stmts: &[StmtNode<'a>], env: EnvironmentRef<'a>) -> Result<()> {
         let prev = std::mem::replace(&mut self.environment, env);
         // try-catch
-        let eval_stmts = || -> Result<()> {
+        let mut eval_stmts = || -> Result<()> {
             for stmt in stmts {
                 self.eval_stmt(stmt)?;
             }
@@ -74,21 +80,21 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
         res
     }
 
-    fn eval_expr(&mut self, expr: ExprNode<'a>) -> Result<Value> {
+    fn eval_expr(&mut self, expr: &ExprNode<'a>) -> Result<Value> {
         let span = expr.span;
-        let value = match *expr.item {
+        let value = match &*expr.item {
             Expr::Variable { name } => match self.environment.borrow().get(name) {
                 Some(value) => value,
-                None => return Err(SyntaxError::undefined_variable(name, span)),
+                None => return Err(SyntaxError::undefined_variable(*name, span)),
             },
             Expr::Assign { name, expr } => {
                 let value = self.eval_expr(expr)?;
                 match self.environment.borrow_mut().assign(name, value.clone()) {
                     Some(_) => value,
-                    None => return Err(SyntaxError::undefined_variable(name, span)),
+                    None => return Err(SyntaxError::undefined_variable(*name, span)),
                 }
             }
-            Expr::Literal { lit } => Value::from(lit),
+            Expr::Literal { lit } => Value::from(*lit),
             Expr::Group { expr } => self.eval_expr(expr)?,
             Expr::Unary { op, expr } => {
                 let val = self.eval_expr(expr)?;
@@ -133,7 +139,7 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Iterator for Interpreter<'a, I> {
     fn next(&mut self) -> Option<Self::Item> {
         self.statements
             .next()
-            .map(|stmt| self.eval_stmt(stmt))
+            .map(|stmt| self.eval_stmt(&stmt))
             .or(None)
     }
 }
