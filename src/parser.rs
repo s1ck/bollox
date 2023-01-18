@@ -113,6 +113,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             (LeftBrace, span) => self.block_stmt(span),
             (If, span) => self.if_stmt(span),
             (While, span) => self.while_stmt(span),
+            (For, span) => self.for_stmt(span),
         });
         match stmt {
             Some(Ok(stmt)) => Ok(stmt),
@@ -179,6 +180,67 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         let stmt = self.statement()?;
         let span = while_span.union(stmt.span);
         Ok(Stmt::while_(cond, stmt).at(span))
+    }
+    // for_stmt -> "for" "(" ( varDecl | exprStmt | ";" )
+    //             expression? ";"
+    //             expression? ")" statement ;
+    //
+    // Gets desugared into a while loop
+    fn for_stmt(&mut self, for_span: Span) -> Result<StmtNode<'a>> {
+        self.expect(LeftParen)?;
+
+        let initializer = match self.tokens.peek() {
+            Some(&(Semicolon, _)) => {
+                let _ = self.tokens.next();
+                None
+            }
+            Some(&(Var, span)) => {
+                let _ = self.tokens.next();
+                Some(self.var_decl(span)?)
+            }
+            Some(_) => {
+                // we do not consume in the catch all case
+                Some(self.expr_stmt()?)
+            }
+            None => Err(SyntaxError::unexpected_eoi())?,
+        };
+
+        let condition = match self.tokens.peek() {
+            Some(&(Semicolon, span)) => Expr::tru().at(span),
+            Some(_) => self.expression()?,
+            _ => Err(SyntaxError::unexpected_eoi())?,
+        };
+        self.expect(Semicolon)?;
+
+        let (increment, inc_span) = match self.tokens.peek() {
+            Some(&(RightParen, span)) => (None, span),
+            Some(_) => {
+                let expr = self.expression()?;
+                let span = expr.span;
+                (Some(expr), span)
+            }
+            None => Err(SyntaxError::unexpected_eoi())?,
+        };
+        self.expect(RightParen)?;
+
+        let mut body = self.statement()?;
+
+        if let Some(increment) = increment {
+            let increment = Stmt::expression(increment).at(inc_span);
+            let span = body.span.union(increment.span);
+            body = Stmt::block([body, increment]).at(span);
+        }
+
+        let span = condition.span.union(body.span);
+        let body = Stmt::while_(condition, body).at(span);
+        let body_span = body.span;
+
+        let body = match initializer {
+            Some(initializer) => Stmt::block([initializer, body]),
+            None => *body.item,
+        };
+
+        Ok(body.at(for_span.union(body_span)))
     }
     // expression -> assignment ;
     fn expression(&mut self) -> Result<ExprNode<'a>> {
