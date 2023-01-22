@@ -36,7 +36,22 @@ where
     Parser { source, tokens }
 }
 
-macro_rules! peek {
+// Checks if the given pattern is next in the token stream
+// without consuming it.
+macro_rules! check {
+    ($this:ident, $($pat:pat),+ $(,)?) => {
+        match $this.tokens.peek() {
+            $(Some(&($pat, _)) => {
+                true
+            }),+,
+            _ => false,
+        }
+    };
+}
+
+// Checks if the given pattern is next in the token stream
+// and consumes it it matches.
+macro_rules! check_consume {
     ($this:ident, { $($pat:pat => $expr:expr),+ $(,)? }) => {
         match $this.tokens.peek() {
             $(Some(&$pat) => {
@@ -62,7 +77,7 @@ macro_rules! bin_op {
     ($this:ident, $descent:ident, $construct:expr, { $($pat:pat => $expr:expr),+ $(,)? }) => {{
         let mut lhs = $this.$descent()?;
         loop {
-            let op = match peek!($this, { $($pat => $expr),+ }) {
+            let op = match check_consume!($this, { $($pat => $expr),+ }) {
                 Some(op) => op,
                 None => break,
             };
@@ -83,7 +98,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     // program     -> declaration* EOF ;
     // declaration -> var_decl | statement ;
     fn declaration(&mut self) -> Result<StmtNode<'a>> {
-        let res = peek!(self, {
+        let res = check_consume!(self, {
             (Var, span) => self.var_decl(span),
         })
         .transpose()?;
@@ -102,13 +117,13 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     // var_decl -> "var" IDENTIFER ( "=" expression )? ";" ;
     fn var_decl(&mut self, var_span: Span) -> Result<StmtNode<'a>> {
         let ident = self.identifier(var_span)?;
-        let init = peek!(self, { (Equal, _) => self.expression()? });
+        let init = check_consume!(self, { (Equal, _) => self.expression()? });
         let end = self.expect(Semicolon)?;
         Ok(Stmt::var(ident, init).at(var_span.union(end)))
     }
     // statement -> expr_stmt | print_stmt | block_stmt | if_stmt | while_stmt ;
     fn statement(&mut self) -> Result<StmtNode<'a>> {
-        let stmt = peek!(self, {
+        let stmt = check_consume!(self, {
             (Print, span) => self.print_stmt(span),
             (LeftBrace, span) => self.block_stmt(span),
             (If, span) => self.if_stmt(span),
@@ -250,7 +265,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     fn assignment(&mut self) -> Result<ExprNode<'a>> {
         let lhs = self.logic_or()?;
 
-        if peek!(self, Equal) {
+        if check_consume!(self, Equal) {
             let assignment = self.assignment()?;
             return match *lhs.item {
                 Expr::Variable { name } => {
@@ -306,18 +321,34 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             (Star, _) => BinaryOp::Mul,
         })
     }
-    // unary -> ( "!" | "-" ) unary | primary ;
+    // unary -> ( "!" | "-" ) unary | call ;
     fn unary(&mut self) -> Result<ExprNode<'a>> {
         let (op, span) = match self.tokens.peek() {
             Some(&(Bang, span)) => (UnaryOp::Not, span),
             Some(&(Minus, span)) => (UnaryOp::Neg, span),
-            _ => return self.primary(),
+            _ => return self.call(),
         };
         let _ = self.tokens.next();
         let inner = self.unary()?;
         let range = span.union(inner.span);
         Ok(Expr::unary(op, inner).at(range))
     }
+    // call -> primary ( "(" arguments? ")" )* ;
+    fn call(&mut self) -> Result<ExprNode<'a>> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if check_consume!(self, LeftParen) {
+                let (args, closing) = self.arguments()?;
+                let span = expr.span.union(closing);
+                expr = Expr::call(expr, args.into()).at(span);
+            } else {
+                break;
+            }
+        }
+        Ok(expr)
+    }
+
     // primary -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
     fn primary(&mut self) -> Result<ExprNode<'a>> {
         let (node, span) = match self.tokens.next() {
@@ -358,6 +389,22 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         };
 
         Ok(Node::new(name, name_span))
+    }
+
+    // arguments -> expression ( "," expression )* ;
+    fn arguments(&mut self) -> Result<(Vec<ExprNode<'a>>, Span)> {
+        let mut args = vec![];
+        if !check!(self, RightParen) {
+            loop {
+                args.push(self.expression()?);
+                if !check_consume!(self, Comma) {
+                    break;
+                }
+            }
+        }
+        let closing = self.expect(RightParen)?;
+
+        Ok((args, closing))
     }
 
     fn expect(&mut self, expected: TokenType) -> Result<Span> {

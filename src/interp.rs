@@ -127,6 +127,7 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
                     _ => self.eval_expr(rhs)?,
                 }
             }
+            Expr::Call { callee: _, args: _ } => todo!(),
         };
 
         Ok(value)

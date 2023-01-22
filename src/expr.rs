@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, rc::Rc};
 
 use crate::{node::Node, token::Span};
 
@@ -14,6 +14,10 @@ pub enum Expr<'a> {
         lhs: ExprNode<'a>,
         op: BinaryOp,
         rhs: ExprNode<'a>,
+    },
+    Call {
+        callee: ExprNode<'a>,
+        args: Rc<[ExprNode<'a>]>,
     },
     Logical {
         lhs: ExprNode<'a>,
@@ -62,6 +66,10 @@ impl<'a> Expr<'a> {
 
     pub fn group(expr: ExprNode<'a>) -> Self {
         Self::Group { expr }
+    }
+
+    pub fn call(callee: ExprNode<'a>, args: Rc<[ExprNode<'a>]>) -> Self {
+        Self::Call { callee, args }
     }
 
     pub fn literal(lit: Literal<'a>) -> Self {
