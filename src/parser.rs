@@ -393,7 +393,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
 
     // arguments -> expression ( "," expression )* ;
     fn arguments(&mut self) -> Result<(Vec<ExprNode<'a>>, Span)> {
-        let mut args = vec![];
+        let mut args = Args::default();
         if !check!(self, RightParen) {
             loop {
                 args.push(self.expression()?);
@@ -403,6 +403,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             }
         }
         let closing = self.expect(RightParen)?;
+        let args = args.finish()?;
 
         Ok((args, closing))
     }
@@ -446,6 +447,41 @@ impl<'a, I: Iterator<Item = Tok>> Iterator for Parser<'a, I> {
             return None;
         }
         Some(self.declaration().map_err(BolloxError::from))
+    }
+}
+
+struct Args<T> {
+    items: Result<Vec<Node<T>>>,
+    limit: usize,
+}
+
+impl<T> Args<T> {
+    fn new(limit: usize) -> Self {
+        Self {
+            items: Ok(Vec::new()),
+            limit,
+        }
+    }
+
+    fn push(&mut self, item: Node<T>) {
+        if let Ok(items) = self.items.as_mut() {
+            if items.len() >= self.limit {
+                let span = item.span;
+                self.items = Err(SyntaxError::too_many_arguments(span));
+            } else {
+                items.push(item);
+            }
+        }
+    }
+
+    fn finish(self) -> Result<Vec<Node<T>>> {
+        self.items
+    }
+}
+
+impl<T> Default for Args<T> {
+    fn default() -> Self {
+        Self::new(255)
     }
 }
 

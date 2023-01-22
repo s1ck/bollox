@@ -103,6 +103,10 @@ pub enum SyntaxError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     InvalidAssignmentTarget(InvalidAssignmentTarget),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TooManyArguments(TooManyArguments),
 }
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -170,6 +174,14 @@ pub struct InvalidAssignmentTarget {
     span: SourceSpan,
 }
 
+#[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Too many arguments. Expected at most 255 arguments.")]
+#[diagnostic()]
+pub struct TooManyArguments {
+    #[label("{}", self)]
+    span: SourceSpan,
+}
+
 impl SyntaxError {
     pub fn missing_closing_parenthesis(span: impl Into<SourceSpan>) -> BolloxError {
         Self::MissingClosingParenthesis(MissingClosingParenthesis { span: span.into() }).into()
@@ -214,6 +226,10 @@ impl SyntaxError {
 
     pub fn invalid_assignment_target(span: Span) -> BolloxError {
         Self::InvalidAssignmentTarget(InvalidAssignmentTarget { span: span.into() }).into()
+    }
+
+    pub fn too_many_arguments(span: Span) -> BolloxError {
+        Self::TooManyArguments(TooManyArguments { span: span.into() }).into()
     }
 }
 
