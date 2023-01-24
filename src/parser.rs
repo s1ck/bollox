@@ -4,7 +4,7 @@ use crate::{
     error::{BolloxError, SyntaxError},
     expr::{BinaryOp, Expr, ExprNode, Literal, LogicalOp, UnaryOp},
     node::Node,
-    stmt::{Stmt, StmtNode},
+    stmt::{FunctionKind, Stmt, StmtNode},
     token::{Span, Token, TokenType},
     Result, Source,
 };
@@ -96,10 +96,11 @@ pub struct Parser<'a, I: Iterator<Item = Tok>> {
 
 impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     // program     -> declaration* EOF ;
-    // declaration -> var_decl | statement ;
+    // declaration -> fun_decl | var_decl | statement ;
     fn declaration(&mut self) -> Result<StmtNode<'a>> {
         let res = check_consume!(self, {
             (Var, span) => self.var_decl(span),
+            (Fun, span) => self.function(FunctionKind::Function, span),
         })
         .transpose()?;
 
@@ -114,6 +115,19 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             },
         }
     }
+    // fun_decl -> "fun" function ;
+    // function -> IDENTIFIER "(" parameters? ")" block ;
+    fn function(&mut self, kind: FunctionKind, fun_span: Span) -> Result<StmtNode<'a>> {
+        let ident = self.identifier(fun_span)?;
+        let span = self.expect(LeftParen)?;
+        let (params, _) = self.arguments(span, |parser, span| parser.identifier(span))?;
+        let block_start = self.expect(LeftBrace)?;
+        let body = self.block_stmt(block_start)?;
+        let span = ident.span.union(body.span);
+
+        Ok(Stmt::fun(ident, kind, params, body).at(span))
+    }
+
     // var_decl -> "var" IDENTIFER ( "=" expression )? ";" ;
     fn var_decl(&mut self, var_span: Span) -> Result<StmtNode<'a>> {
         let ident = self.identifier(var_span)?;
@@ -338,11 +352,15 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         let mut expr = self.primary()?;
 
         loop {
-            if check_consume!(self, LeftParen) {
-                let (args, closing) = self.arguments()?;
-                let span = expr.span.union(closing);
-                expr = Expr::call(expr, args.into()).at(span);
-            } else {
+            let res = check_consume!(self, {
+                (LeftParen, span) => {
+                    let (args, closing) = self.arguments(span, |parser, _| parser.expression())?;
+                    let span = expr.span.union(closing);
+                    expr = Expr::call(expr, args.into()).at(span);
+                }
+            });
+
+            if res.is_none() {
                 break;
             }
         }
@@ -392,11 +410,17 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     }
 
     // arguments -> expression ( "," expression )* ;
-    fn arguments(&mut self) -> Result<(Vec<ExprNode<'a>>, Span)> {
-        let mut args = Args::default();
+    fn arguments<T, F>(&mut self, span: Span, map: F) -> Result<(Vec<Node<T>>, Span)>
+    where
+        F: Fn(&mut Self, Span) -> Result<Node<T>>,
+    {
+        let mut args = Args::<T>::default();
+        let mut span = span;
         if !check!(self, RightParen) {
             loop {
-                args.push(self.expression()?);
+                let item = map(self, span)?;
+                span = item.span;
+                args.push(item);
                 if !check_consume!(self, Comma) {
                     break;
                 }

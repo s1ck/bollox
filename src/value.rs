@@ -143,7 +143,7 @@ impl Value {
         })
     }
 
-    pub(crate) fn as_callable(&self, span: Span) -> Result<&dyn Callable> {
+    pub(crate) fn as_callable(&self, _span: Span) -> Result<&dyn Callable> {
         todo!()
     }
 

@@ -15,7 +15,7 @@ where
 }
 
 pub struct Interpreter<'a, I: Iterator<Item = StmtNode<'a>>> {
-    globals: EnvironmentRef<'a>,
+    _globals: EnvironmentRef<'a>,
     environment: EnvironmentRef<'a>,
     statements: I,
 }
@@ -25,7 +25,7 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
         let globals: EnvironmentRef = Environment::new().into();
 
         Self {
-            globals: globals.clone(),
+            _globals: globals.clone(),
             environment: globals,
             statements,
         }
@@ -66,6 +66,7 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
                 }
                 Ok(())
             }
+            Stmt::Function(_, _) => todo!(),
         }
     }
 

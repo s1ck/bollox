@@ -8,6 +8,7 @@ pub enum Stmt<'a> {
     Expression(ExprNode<'a>),
     Print(ExprNode<'a>),
     Var(Node<&'a str>, Option<ExprNode<'a>>),
+    Function(FunctionPrototype<'a>, StmtNode<'a>),
     If(ExprNode<'a>, StmtNode<'a>, Option<StmtNode<'a>>),
     While(ExprNode<'a>, StmtNode<'a>),
 }
@@ -52,4 +53,25 @@ impl<'a> Stmt<'a> {
     pub fn while_(condition: ExprNode<'a>, stmt: StmtNode<'a>) -> Self {
         Self::While(condition, stmt)
     }
+
+    pub fn fun(
+        name: Node<&'a str>,
+        kind: FunctionKind,
+        params: Vec<Node<&'a str>>,
+        body: StmtNode<'a>,
+    ) -> Self {
+        Self::Function(FunctionPrototype { name, kind, params }, body)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FunctionKind {
+    Function,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FunctionPrototype<'a> {
+    name: Node<&'a str>,
+    kind: FunctionKind,
+    params: Vec<Node<&'a str>>,
 }
