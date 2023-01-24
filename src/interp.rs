@@ -15,14 +15,18 @@ where
 }
 
 pub struct Interpreter<'a, I: Iterator<Item = StmtNode<'a>>> {
+    globals: EnvironmentRef<'a>,
     environment: EnvironmentRef<'a>,
     statements: I,
 }
 
 impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
     fn new(statements: I) -> Self {
+        let globals: EnvironmentRef = Environment::new().into();
+
         Self {
-            environment: Environment::new().into(),
+            globals: globals.clone(),
+            environment: globals,
             statements,
         }
     }
@@ -127,7 +131,21 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
                     _ => self.eval_expr(rhs)?,
                 }
             }
-            Expr::Call { callee: _, args: _ } => todo!(),
+            Expr::Call { callee, args } => {
+                let span = callee.span;
+                let callee = self.eval_expr(callee)?;
+                let callable = callee.as_callable(span)?;
+                let args = args
+                    .iter()
+                    .map(|arg| self.eval_expr(arg))
+                    .collect::<Vec<_>>();
+
+                if args.len() != callable.arity() {
+                    todo!("runtime error arity mismatch");
+                }
+
+                todo!();
+            }
         };
 
         Ok(value)

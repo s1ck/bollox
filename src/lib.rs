@@ -1,6 +1,7 @@
 pub mod error;
 pub mod token;
 
+mod callable;
 mod env;
 mod expr;
 mod interp;

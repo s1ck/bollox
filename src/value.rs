@@ -3,6 +3,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use crate::{
+    callable::Callable,
     error::RuntimeError,
     expr::{BinaryOp, Literal},
     token::Span,
@@ -16,6 +17,7 @@ pub enum Value {
     Boolean(bool),
     Number(f64),
     Str(Arc<str>),
+    Callable(Arc<str>),
 }
 
 impl From<Literal<'_>> for Value {
@@ -37,6 +39,7 @@ impl Display for Value {
             Value::Boolean(b) => b.fmt(f),
             Value::Number(n) => n.fmt(f),
             Value::Str(s) => s.fmt(f),
+            Value::Callable(s) => s.fmt(f),
         }
     }
 }
@@ -138,6 +141,10 @@ impl Value {
             Value::Nil => false,
             _ => true,
         })
+    }
+
+    pub(crate) fn as_callable(&self, span: Span) -> Result<&dyn Callable> {
+        todo!()
     }
 
     fn as_num(&self, span: Span) -> Result<f64> {
