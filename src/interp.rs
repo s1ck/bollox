@@ -20,8 +20,8 @@ pub struct Interpreter<'a, I: Iterator<Item = StmtNode<'a>>> {
 }
 
 pub(crate) struct InterpreterContext<'a> {
-    _globals: EnvironmentRef<'a>,
-    environment: EnvironmentRef<'a>,
+    pub(crate) globals: EnvironmentRef<'a>,
+    pub(crate) environment: EnvironmentRef<'a>,
 }
 
 impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
@@ -29,7 +29,7 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
         let globals: EnvironmentRef = Environment::new().into();
 
         let context = InterpreterContext {
-            _globals: globals.clone(),
+            globals: globals.clone(),
             environment: globals,
         };
 
@@ -40,8 +40,29 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
     }
 }
 
-impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
-    fn eval_stmt(context: &mut InterpreterContext<'a>, stmt: &StmtNode<'a>) -> Result<()> {
+pub(crate) struct InterpreterOps;
+
+impl InterpreterOps {
+    pub(crate) fn eval_stmts<'a>(
+        context: &mut InterpreterContext<'a>,
+        stmts: &[StmtNode<'a>],
+        env: EnvironmentRef<'a>,
+    ) -> Result<()> {
+        let prev = std::mem::replace(&mut context.environment, env);
+        // try-catch
+        let mut eval_stmts = || -> Result<()> {
+            for stmt in stmts {
+                Self::eval_stmt(context, stmt)?;
+            }
+            Ok(())
+        };
+        let res = eval_stmts();
+        // finally
+        context.environment = prev;
+        res
+    }
+
+    fn eval_stmt<'a>(context: &mut InterpreterContext<'a>, stmt: &StmtNode<'a>) -> Result<()> {
         match &*stmt.item {
             Stmt::Expression(expr) => Self::eval_expr(context, expr).map(|_| Ok(()))?,
             Stmt::Print(expr) => Self::eval_expr(context, expr).map(|v| {
@@ -58,7 +79,7 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
             }
             Stmt::Block(stmts) => {
                 let new_env = Environment::with_enclosing(context.environment.clone());
-                Self::eval_block(context, stmts, new_env.into())
+                Self::eval_stmts(context, stmts, new_env.into())
             }
             Stmt::If(condition, then_branch, else_branch) => {
                 if Self::eval_expr(context, condition)?.as_bool()? {
@@ -78,26 +99,7 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
         }
     }
 
-    fn eval_block(
-        context: &mut InterpreterContext<'a>,
-        stmts: &[StmtNode<'a>],
-        env: EnvironmentRef<'a>,
-    ) -> Result<()> {
-        let prev = std::mem::replace(&mut context.environment, env);
-        // try-catch
-        let mut eval_stmts = || -> Result<()> {
-            for stmt in stmts {
-                Self::eval_stmt(context, stmt)?;
-            }
-            Ok(())
-        };
-        let res = eval_stmts();
-        // finally
-        context.environment = prev;
-        res
-    }
-
-    fn eval_expr(context: &mut InterpreterContext<'a>, expr: &ExprNode<'a>) -> Result<Value> {
+    fn eval_expr<'a>(context: &mut InterpreterContext<'a>, expr: &ExprNode<'a>) -> Result<Value> {
         let span = expr.span;
         let value = match &*expr.item {
             Expr::Variable { name } => match context.environment.borrow().get(name) {
@@ -171,7 +173,7 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Iterator for Interpreter<'a, I> {
     fn next(&mut self) -> Option<Self::Item> {
         self.statements
             .next()
-            .map(|stmt| Self::eval_stmt(&mut self.context, &stmt))
+            .map(|stmt| InterpreterOps::eval_stmt(&mut self.context, &stmt))
             .or(None)
     }
 }

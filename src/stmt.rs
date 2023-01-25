@@ -58,7 +58,7 @@ impl<'a> Stmt<'a> {
         name: Node<&'a str>,
         kind: FunctionKind,
         params: Vec<Node<&'a str>>,
-        body: StmtNode<'a>,
+        body: Vec<StmtNode<'a>>,
     ) -> Self {
         Self::Function(FunctionDeclaration {
             name,
@@ -76,8 +76,8 @@ pub enum FunctionKind {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FunctionDeclaration<'a> {
-    name: Node<&'a str>,
-    kind: FunctionKind,
-    params: Vec<Node<&'a str>>,
-    body: StmtNode<'a>,
+    pub name: Node<&'a str>,
+    pub kind: FunctionKind,
+    pub params: Vec<Node<&'a str>>,
+    pub body: Vec<StmtNode<'a>>,
 }

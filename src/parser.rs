@@ -121,11 +121,11 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         let ident = self.identifier(fun_span)?;
         let span = self.expect(LeftParen)?;
         let (params, _) = self.arguments(span, |parser, span| parser.identifier(span))?;
-        let block_start = self.expect(LeftBrace)?;
-        let body = self.block_stmt(block_start)?;
-        let span = ident.span.union(body.span);
+        let _ = self.expect(LeftBrace)?;
+        let (stmts, span) = self.scoped_declarations()?;
+        let span = ident.span.union(span);
 
-        Ok(Stmt::fun(ident, kind, params, body).at(span))
+        Ok(Stmt::fun(ident, kind, params, stmts).at(span))
     }
 
     // var_decl -> "var" IDENTIFER ( "=" expression )? ";" ;
@@ -163,8 +163,13 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         let span = self.expect(Semicolon)?;
         Ok(Stmt::print(expr).at(print_span.union(span)))
     }
-    // block_stmt -> "{" declaration* "}"
+    // block_stmt -> scoped_declarations ;
     fn block_stmt(&mut self, start: Span) -> Result<StmtNode<'a>> {
+        let (stmts, end) = self.scoped_declarations()?;
+        Ok(Stmt::block(stmts).at(start.union(end)))
+    }
+    // scoped_declarations -> "{" declaration* "}" ;
+    fn scoped_declarations(&mut self) -> Result<(Vec<StmtNode<'a>>, Span)> {
         let mut stmts = Vec::new();
         let end = loop {
             match self.tokens.peek() {
@@ -179,7 +184,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
                 _ => stmts.push(self.declaration()?),
             }
         };
-        Ok(Stmt::block(stmts).at(start.union(end)))
+        Ok((stmts, end))
     }
     // if_stmt -> "if" "(" expression ")" statement ( "else" statement )? ;
     fn if_stmt(&mut self, if_span: Span) -> Result<StmtNode<'a>> {
