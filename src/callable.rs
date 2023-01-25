@@ -3,7 +3,8 @@ use std::time::SystemTime;
 
 use crate::env::Environment;
 use crate::interp::{InterpreterContext, InterpreterOps};
-use crate::stmt::FunctionDeclaration;
+use crate::node::Node;
+use crate::stmt::{FunctionDeclaration, StmtNode};
 use crate::token::Span;
 use crate::value::Value;
 use crate::Result;
@@ -20,7 +21,19 @@ pub(crate) trait Callable<'a> {
 }
 
 pub(crate) struct Function<'a> {
-    declaration: FunctionDeclaration<'a>,
+    name: &'a str,
+    params: Vec<Node<&'a str>>,
+    body: Vec<StmtNode<'a>>,
+}
+
+impl<'a> Function<'a> {
+    pub(crate) fn new(declaration: FunctionDeclaration<'a>) -> Self {
+        Self {
+            name: declaration.name.item,
+            params: declaration.params,
+            body: declaration.body,
+        }
+    }
 }
 
 impl<'a> Callable<'a> for Function<'a> {
@@ -34,21 +47,26 @@ impl<'a> Callable<'a> for Function<'a> {
         let mut fun_environment = Environment::with_enclosing(context.globals.clone());
 
         // register param -> arg mappings in the local environment
-        self.declaration
-            .params
+        self.params
             .iter()
             .zip(args.iter())
             .for_each(|(param, arg)| {
                 fun_environment.define(param.item, arg.clone());
             });
 
-        InterpreterOps::eval_stmts(context, &self.declaration.body, fun_environment.into())?;
+        InterpreterOps::eval_stmts(context, &self.body, fun_environment.into())?;
 
         Ok(Value::Nil)
     }
 
     fn arity(&self) -> usize {
-        todo!()
+        self.params.len()
+    }
+}
+
+impl<'a> Debug for Function<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<fn {}>", self.name)
     }
 }
 
