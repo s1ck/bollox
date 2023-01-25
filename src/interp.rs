@@ -19,7 +19,7 @@ pub struct Interpreter<'a, I: Iterator<Item = StmtNode<'a>>> {
     statements: I,
 }
 
-struct InterpreterContext<'a> {
+pub(crate) struct InterpreterContext<'a> {
     _globals: EnvironmentRef<'a>,
     environment: EnvironmentRef<'a>,
 }
