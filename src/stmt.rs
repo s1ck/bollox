@@ -76,8 +76,8 @@ pub enum FunctionKind {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FunctionDeclaration<'a> {
-    pub name: Node<&'a str>,
-    pub kind: FunctionKind,
-    pub params: Vec<Node<&'a str>>,
-    pub body: Vec<StmtNode<'a>>,
+    pub(crate) name: Node<&'a str>,
+    pub(crate) kind: FunctionKind,
+    pub(crate) params: Vec<Node<&'a str>>,
+    pub(crate) body: Vec<StmtNode<'a>>,
 }
