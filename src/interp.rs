@@ -66,7 +66,7 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
                 }
                 Ok(())
             }
-            Stmt::Function(_, _) => todo!(),
+            Stmt::Function(_declaration) => todo!(),
         }
     }
 
