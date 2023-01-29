@@ -3,7 +3,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use crate::{
-    callable::Callable,
+    callable::{Callable, Function},
     error::RuntimeError,
     expr::{BinaryOp, Literal},
     token::Span,
@@ -11,16 +11,16 @@ use crate::{
 };
 
 #[derive(Debug, Default, Clone, PartialEq)]
-pub enum Value {
+pub enum Value<'a> {
     #[default]
     Nil,
     Boolean(bool),
     Number(f64),
     Str(Arc<str>),
-    Callable(Arc<str>),
+    Fun(Arc<Function<'a>>),
 }
 
-impl From<Literal<'_>> for Value {
+impl<'a> From<Literal<'_>> for Value<'a> {
     fn from(lit: Literal<'_>) -> Self {
         match lit {
             Literal::Nil => Value::Nil,
@@ -32,18 +32,19 @@ impl From<Literal<'_>> for Value {
     }
 }
 
-impl Display for Value {
+impl<'a> Display for Value<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Nil => f.write_str("nil"),
             Value::Boolean(b) => b.fmt(f),
             Value::Number(n) => n.fmt(f),
             Value::Str(s) => s.fmt(f),
-            Value::Callable(s) => s.fmt(f),
+            Value::Fun(fun) => fun.fmt(f),
         }
     }
 }
-impl Value {
+
+impl<'a> Value<'a> {
     pub(crate) fn not(&self) -> Result<Self> {
         let b = self.as_bool()?;
         Ok((!b).into())
@@ -172,20 +173,26 @@ impl Value {
     }
 }
 
-impl From<bool> for Value {
+impl<'a> From<bool> for Value<'a> {
     fn from(b: bool) -> Self {
         Value::Boolean(b)
     }
 }
 
-impl From<f64> for Value {
+impl<'a> From<f64> for Value<'a> {
     fn from(n: f64) -> Self {
         Value::Number(n)
     }
 }
 
-impl From<String> for Value {
+impl<'a> From<String> for Value<'a> {
     fn from(s: String) -> Self {
         Value::Str(Arc::from(s))
+    }
+}
+
+impl<'a> From<Function<'a>> for Value<'a> {
+    fn from(f: Function<'a>) -> Self {
+        Value::Fun(Arc::from(f))
     }
 }

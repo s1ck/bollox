@@ -1,10 +1,11 @@
+use std::fmt::Display;
+
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
 use crate::{
     expr::BinaryOp,
     token::{Span, TokenType},
-    value::Value,
 };
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -252,7 +253,7 @@ pub enum RuntimeError {
 #[error("Expected number literal, got {:?}.", found)]
 #[diagnostic()]
 pub struct NonNumber {
-    found: Value,
+    found: String,
     #[label("{}", self)]
     span: SourceSpan,
 }
@@ -261,7 +262,7 @@ pub struct NonNumber {
 #[error("Expected string literal, got {:?}.", found)]
 #[diagnostic()]
 pub struct NonStr {
-    found: Value,
+    found: String,
     #[label("{}", self)]
     span: SourceSpan,
 }
@@ -270,38 +271,39 @@ pub struct NonStr {
 #[error("Incompatible types for op `{}`, got {:?} and {:?} .", op, lhs, rhs)]
 #[diagnostic()]
 pub struct IncompatibleTypes {
-    lhs: Value,
-    rhs: Value,
+    lhs: String,
+    rhs: String,
     op: BinaryOp,
     #[label("{}", self)]
     span: SourceSpan,
 }
 
 impl RuntimeError {
-    pub fn non_number(found: &Value, span: Span) -> BolloxError {
-        let found = found.clone();
+    pub fn non_number(found: impl Display, span: Span) -> BolloxError {
         Self::NonNumber(NonNumber {
-            found,
+            found: found.to_string(),
             span: span.into(),
         })
         .into()
     }
 
-    pub fn non_str(found: &Value, span: Span) -> BolloxError {
-        let found = found.clone();
+    pub fn non_str(found: impl Display, span: Span) -> BolloxError {
         Self::NonStr(NonStr {
-            found,
+            found: found.to_string(),
             span: span.into(),
         })
         .into()
     }
 
-    pub fn incompatible_types(op: BinaryOp, lhs: &Value, rhs: &Value, span: Span) -> BolloxError {
-        let lhs = lhs.clone();
-        let rhs = rhs.clone();
+    pub fn incompatible_types(
+        op: BinaryOp,
+        lhs: impl Display,
+        rhs: impl Display,
+        span: Span,
+    ) -> BolloxError {
         Self::IncompatibleTypes(IncompatibleTypes {
-            lhs,
-            rhs,
+            lhs: lhs.to_string(),
+            rhs: rhs.to_string(),
             op,
             span: span.into(),
         })

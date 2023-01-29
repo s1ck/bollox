@@ -1,4 +1,5 @@
 use crate::{
+    callable::Function,
     env::{Environment, EnvironmentRef},
     error::SyntaxError,
     expr::{BinaryOp, Expr, ExprNode, LogicalOp, UnaryOp},
@@ -95,11 +96,21 @@ impl InterpreterOps {
                 }
                 Ok(())
             }
-            Stmt::Function(_declaration) => todo!(),
+            Stmt::Function(declaration) => {
+                let fun = Function::new(declaration);
+                context
+                    .environment
+                    .borrow_mut()
+                    .define(declaration.name.item, fun.into());
+                Ok(())
+            }
         }
     }
 
-    fn eval_expr<'a>(context: &mut InterpreterContext<'a>, expr: &ExprNode<'a>) -> Result<Value> {
+    fn eval_expr<'a>(
+        context: &mut InterpreterContext<'a>,
+        expr: &ExprNode<'a>,
+    ) -> Result<Value<'a>> {
         let span = expr.span;
         let value = match &*expr.item {
             Expr::Variable { name } => match context.environment.borrow().get(name) {

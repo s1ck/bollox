@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::time::SystemTime;
 
 use crate::env::Environment;
@@ -13,25 +13,27 @@ pub(crate) trait Callable<'a> {
     fn call(
         &self,
         context: &mut InterpreterContext<'a>,
-        args: &[Value],
+        args: &[Value<'a>],
         span: Span,
-    ) -> Result<Value>;
+    ) -> Result<Value<'a>>;
 
     fn arity(&self) -> usize;
 }
 
-pub(crate) struct Function<'a> {
+#[derive(Debug, PartialEq)]
+pub struct Function<'a> {
     name: &'a str,
     params: Vec<Node<&'a str>>,
     body: Vec<StmtNode<'a>>,
 }
 
 impl<'a> Function<'a> {
-    pub(crate) fn new(declaration: FunctionDeclaration<'a>) -> Self {
+    pub(crate) fn new(declaration: &FunctionDeclaration<'a>) -> Self {
         Self {
             name: declaration.name.item,
-            params: declaration.params,
-            body: declaration.body,
+            // TODO: make params and body Rc<>
+            params: declaration.params.clone(),
+            body: declaration.body.clone(),
         }
     }
 }
@@ -40,9 +42,9 @@ impl<'a> Callable<'a> for Function<'a> {
     fn call(
         &self,
         context: &mut InterpreterContext<'a>,
-        args: &[Value],
+        args: &[Value<'a>],
         _span: Span,
-    ) -> Result<Value> {
+    ) -> Result<Value<'a>> {
         // each function call needs it's own environment to support recursion
         let mut fun_environment = Environment::with_enclosing(context.globals.clone());
 
@@ -64,7 +66,7 @@ impl<'a> Callable<'a> for Function<'a> {
     }
 }
 
-impl<'a> Debug for Function<'a> {
+impl<'a> Display for Function<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<fn {}>", self.name)
     }
@@ -75,7 +77,12 @@ impl<'a> Debug for Function<'a> {
 pub struct Clock;
 
 impl<'a> Callable<'a> for Clock {
-    fn call(&self, _: &mut InterpreterContext<'a>, _args: &[Value], _span: Span) -> Result<Value> {
+    fn call(
+        &self,
+        _: &mut InterpreterContext<'a>,
+        _args: &[Value<'a>],
+        _span: Span,
+    ) -> Result<Value<'a>> {
         Ok(SystemTime::now()
             .elapsed()
             .map_or(0.0, |d| d.as_secs_f64())

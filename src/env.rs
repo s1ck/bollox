@@ -6,7 +6,7 @@ pub(crate) type EnvironmentRef<'a> = Rc<RefCell<Environment<'a>>>;
 
 pub(crate) struct Environment<'a> {
     enclosing: Option<Rc<RefCell<Environment<'a>>>>,
-    values: HashMap<&'a str, Value>,
+    values: HashMap<&'a str, Value<'a>>,
 }
 
 impl<'a> Environment<'a> {
@@ -24,11 +24,11 @@ impl<'a> Environment<'a> {
         }
     }
 
-    pub(crate) fn define(&mut self, name: &'a str, value: Value) {
+    pub(crate) fn define(&mut self, name: &'a str, value: Value<'a>) {
         let _ = self.values.insert(name, value);
     }
 
-    pub(crate) fn get(&self, name: &'a str) -> Option<Value> {
+    pub(crate) fn get(&self, name: &'a str) -> Option<Value<'a>> {
         if self.values.contains_key(name) {
             return self.values.get(name).cloned();
         }
@@ -39,7 +39,7 @@ impl<'a> Environment<'a> {
         }
     }
 
-    pub(crate) fn assign(&mut self, name: &'a str, value: Value) -> Option<Value> {
+    pub(crate) fn assign(&mut self, name: &'a str, value: Value<'a>) -> Option<Value<'a>> {
         if self.values.contains_key(name) {
             return self.values.insert(name, value);
         }
