@@ -1,9 +1,9 @@
 use crate::{
-    callable::Function,
+    callable::{Callable, Function},
     env::{Environment, EnvironmentRef},
     error::SyntaxError,
     expr::{BinaryOp, Expr, ExprNode, LogicalOp, UnaryOp},
-    stmt::{Stmt, StmtNode},
+    stmt::{FunctionKind, Stmt, StmtNode},
     value::Value,
     Result,
 };
@@ -157,20 +157,23 @@ impl InterpreterOps {
                     _ => Self::eval_expr(context, rhs)?,
                 }
             }
-            Expr::Call { callee, args } => {
+            Expr::Call { kind, callee, args } => {
                 let span = callee.span;
                 let callee = Self::eval_expr(context, callee)?;
-                let callable = callee.as_callable(span)?;
+                let callable = match kind {
+                    FunctionKind::Function => callee.as_function(span)?,
+                };
+
                 let args = args
                     .iter()
                     .map(|arg| Self::eval_expr(context, arg))
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>>>()?;
 
                 if args.len() != callable.arity() {
                     todo!("runtime error arity mismatch");
                 }
 
-                todo!();
+                callable.call(context, &args, span)?
             }
         };
 

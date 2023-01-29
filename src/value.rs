@@ -3,7 +3,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use crate::{
-    callable::{Callable, Function},
+    callable::Function,
     error::RuntimeError,
     expr::{BinaryOp, Literal},
     token::Span,
@@ -63,7 +63,7 @@ impl<'a> Value<'a> {
             }
             Value::Str(lhs) => {
                 let rhs = rhs.as_str(span)?;
-                format!("{}{}", lhs, rhs).into()
+                format!("{lhs}{rhs}").into()
             }
             _ => {
                 return Err(RuntimeError::incompatible_types(
@@ -144,8 +144,11 @@ impl<'a> Value<'a> {
         })
     }
 
-    pub(crate) fn as_callable(&self, _span: Span) -> Result<&dyn Callable> {
-        todo!()
+    pub(crate) fn as_function(&self, _span: Span) -> Result<Arc<Function<'a>>> {
+        let Value::Fun(f) = self else {
+            todo!("non_fun error")
+        };
+        Ok(Arc::clone(f))
     }
 
     fn as_num(&self, span: Span) -> Result<f64> {

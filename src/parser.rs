@@ -361,7 +361,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
                 (LeftParen, span) => {
                     let (args, closing) = self.arguments(span, |parser, _| parser.expression())?;
                     let span = expr.span.union(closing);
-                    expr = Expr::call(expr, args.into()).at(span);
+                    expr = Expr::call(FunctionKind::Function, expr, args.into()).at(span);
                 }
             });
 
