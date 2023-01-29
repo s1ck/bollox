@@ -246,6 +246,14 @@ pub enum RuntimeError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    NonFunc(NonFunc),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ArgsLengthMismatch(ArgsLengthMismatch),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     IncompatibleTypes(IncompatibleTypes),
 }
 
@@ -262,6 +270,25 @@ pub struct NonNumber {
 #[error("Expected string literal, got {:?}.", found)]
 #[diagnostic()]
 pub struct NonStr {
+    found: String,
+    #[label("{}", self)]
+    span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Expected function, got {:?}.", found)]
+#[diagnostic()]
+pub struct NonFunc {
+    found: String,
+    #[label("{}", self)]
+    span: SourceSpan,
+}
+
+#[derive(Clone, Debug, Error, Diagnostic)]
+#[error("Expected {:?} arguments, got {:?}.", expected, found)]
+#[diagnostic()]
+pub struct ArgsLengthMismatch {
+    expected: String,
     found: String,
     #[label("{}", self)]
     span: SourceSpan,
@@ -289,6 +316,23 @@ impl RuntimeError {
 
     pub fn non_str(found: impl Display, span: Span) -> BolloxError {
         Self::NonStr(NonStr {
+            found: found.to_string(),
+            span: span.into(),
+        })
+        .into()
+    }
+
+    pub fn non_func(found: impl Display, span: Span) -> BolloxError {
+        Self::NonFunc(NonFunc {
+            found: found.to_string(),
+            span: span.into(),
+        })
+        .into()
+    }
+
+    pub fn args_len(expected: impl Display, found: impl Display, span: Span) -> BolloxError {
+        Self::ArgsLengthMismatch(ArgsLengthMismatch {
+            expected: expected.to_string(),
             found: found.to_string(),
             span: span.into(),
         })

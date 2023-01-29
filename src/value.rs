@@ -17,7 +17,7 @@ pub enum Value<'a> {
     Boolean(bool),
     Number(f64),
     Str(Arc<str>),
-    Fun(Arc<Function<'a>>),
+    Func(Arc<Function<'a>>),
 }
 
 impl<'a> From<Literal<'_>> for Value<'a> {
@@ -39,7 +39,7 @@ impl<'a> Display for Value<'a> {
             Value::Boolean(b) => b.fmt(f),
             Value::Number(n) => n.fmt(f),
             Value::Str(s) => s.fmt(f),
-            Value::Fun(fun) => fun.fmt(f),
+            Value::Func(fun) => fun.fmt(f),
         }
     }
 }
@@ -144,13 +144,6 @@ impl<'a> Value<'a> {
         })
     }
 
-    pub(crate) fn as_function(&self, _span: Span) -> Result<Arc<Function<'a>>> {
-        let Value::Fun(f) = self else {
-            todo!("non_fun error")
-        };
-        Ok(Arc::clone(f))
-    }
-
     fn as_num(&self, span: Span) -> Result<f64> {
         let Value::Number(n) = self else {
            return Err(RuntimeError::non_number(self, span))
@@ -163,6 +156,13 @@ impl<'a> Value<'a> {
             return Err(RuntimeError::non_str(self, span))
         };
         Ok(Arc::clone(s))
+    }
+
+    pub(crate) fn as_func(&self, span: Span) -> Result<Arc<Function<'a>>> {
+        let Value::Func(f) = self else {
+           return Err(RuntimeError::non_func(self, span))
+        };
+        Ok(Arc::clone(f))
     }
 
     fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
@@ -196,6 +196,6 @@ impl<'a> From<String> for Value<'a> {
 
 impl<'a> From<Function<'a>> for Value<'a> {
     fn from(f: Function<'a>) -> Self {
-        Value::Fun(Arc::from(f))
+        Value::Func(Arc::from(f))
     }
 }

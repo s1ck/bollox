@@ -1,7 +1,7 @@
 use crate::{
     callable::{Callable, Function},
     env::{Environment, EnvironmentRef},
-    error::SyntaxError,
+    error::{RuntimeError, SyntaxError},
     expr::{BinaryOp, Expr, ExprNode, LogicalOp, UnaryOp},
     stmt::{FunctionKind, Stmt, StmtNode},
     value::Value,
@@ -96,7 +96,7 @@ impl InterpreterOps {
                 }
                 Ok(())
             }
-            Stmt::Function(declaration) => {
+            Stmt::Func(declaration) => {
                 let fun = Function::new(declaration);
                 context
                     .environment
@@ -161,7 +161,7 @@ impl InterpreterOps {
                 let span = callee.span;
                 let callee = Self::eval_expr(context, callee)?;
                 let callable = match kind {
-                    FunctionKind::Function => callee.as_function(span)?,
+                    FunctionKind::Function => callee.as_func(span)?,
                 };
 
                 let args = args
@@ -170,7 +170,7 @@ impl InterpreterOps {
                     .collect::<Result<Vec<_>>>()?;
 
                 if args.len() != callable.arity() {
-                    todo!("runtime error arity mismatch");
+                    return Err(RuntimeError::args_len(callable.arity(), args.len(), span));
                 }
 
                 callable.call(context, &args, span)?
