@@ -1,6 +1,5 @@
-use std::cmp::Ordering;
 use std::fmt::Display;
-use std::sync::Arc;
+use std::{cmp::Ordering, rc::Rc};
 
 use crate::{
     callable::Function,
@@ -16,8 +15,8 @@ pub enum Value<'a> {
     Nil,
     Boolean(bool),
     Number(f64),
-    Str(Arc<str>),
-    Func(Arc<Function<'a>>),
+    Str(Rc<str>),
+    Func(Rc<Function<'a>>),
 }
 
 impl<'a> From<Literal<'_>> for Value<'a> {
@@ -151,18 +150,18 @@ impl<'a> Value<'a> {
         Ok(*n)
     }
 
-    fn as_str(&self, span: Span) -> Result<Arc<str>> {
+    fn as_str(&self, span: Span) -> Result<Rc<str>> {
         let Value::Str(s) = self else {
             return Err(RuntimeError::non_str(self, span))
         };
-        Ok(Arc::clone(s))
+        Ok(Rc::clone(s))
     }
 
-    pub(crate) fn as_func(&self, span: Span) -> Result<Arc<Function<'a>>> {
+    pub(crate) fn as_func(&self, span: Span) -> Result<Rc<Function<'a>>> {
         let Value::Func(f) = self else {
            return Err(RuntimeError::non_func(self, span))
         };
-        Ok(Arc::clone(f))
+        Ok(Rc::clone(f))
     }
 
     fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
@@ -190,12 +189,12 @@ impl<'a> From<f64> for Value<'a> {
 
 impl<'a> From<String> for Value<'a> {
     fn from(s: String) -> Self {
-        Value::Str(Arc::from(s))
+        Value::Str(Rc::from(s))
     }
 }
 
 impl<'a> From<Function<'a>> for Value<'a> {
     fn from(f: Function<'a>) -> Self {
-        Value::Func(Arc::from(f))
+        Value::Func(Rc::from(f))
     }
 }
