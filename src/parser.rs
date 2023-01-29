@@ -125,7 +125,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         let (stmts, span) = self.scoped_declarations()?;
         let span = ident.span.union(span);
 
-        Ok(Stmt::fun(ident, kind, params, stmts).at(span))
+        Ok(Stmt::func(ident, kind, params, stmts).at(span))
     }
 
     // var_decl -> "var" IDENTIFER ( "=" expression )? ";" ;

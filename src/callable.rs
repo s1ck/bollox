@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Display};
+use std::rc::Rc;
 use std::time::SystemTime;
 
 use crate::env::Environment;
@@ -23,17 +24,16 @@ pub(crate) trait Callable<'a> {
 #[derive(Debug, PartialEq)]
 pub struct Function<'a> {
     name: &'a str,
-    params: Vec<Node<&'a str>>,
-    body: Vec<StmtNode<'a>>,
+    params: Rc<[Node<&'a str>]>,
+    body: Rc<[StmtNode<'a>]>,
 }
 
 impl<'a> Function<'a> {
     pub(crate) fn new(declaration: &FunctionDeclaration<'a>) -> Self {
         Self {
             name: declaration.name.item,
-            // TODO: make params and body Rc<>
-            params: declaration.params.clone(),
-            body: declaration.body.clone(),
+            params: Rc::clone(&declaration.params),
+            body: Rc::clone(&declaration.body),
         }
     }
 }

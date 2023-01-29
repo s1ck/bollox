@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{expr::ExprNode, node::Node, token::Span};
 
 pub type StmtNode<'a> = Node<Box<Stmt<'a>>>;
@@ -54,7 +56,7 @@ impl<'a> Stmt<'a> {
         Self::While(condition, stmt)
     }
 
-    pub fn fun(
+    pub fn func(
         name: Node<&'a str>,
         kind: FunctionKind,
         params: Vec<Node<&'a str>>,
@@ -63,8 +65,8 @@ impl<'a> Stmt<'a> {
         Self::Func(FunctionDeclaration {
             name,
             kind,
-            params,
-            body,
+            params: params.into(),
+            body: body.into(),
         })
     }
 }
@@ -78,6 +80,6 @@ pub enum FunctionKind {
 pub struct FunctionDeclaration<'a> {
     pub(crate) name: Node<&'a str>,
     pub(crate) kind: FunctionKind,
-    pub(crate) params: Vec<Node<&'a str>>,
-    pub(crate) body: Vec<StmtNode<'a>>,
+    pub(crate) params: Rc<[Node<&'a str>]>,
+    pub(crate) body: Rc<[StmtNode<'a>]>,
 }
