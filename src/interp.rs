@@ -1,7 +1,7 @@
 use crate::{
     callable::{Callable, Function},
     env::{Environment, EnvironmentRef},
-    error::{RuntimeError, SyntaxError},
+    error::{BolloxError, RuntimeError, SyntaxError},
     expr::{BinaryOp, Expr, ExprNode, LogicalOp, UnaryOp},
     stmt::{FunctionKind, Stmt, StmtNode},
     value::Value,
@@ -41,6 +41,8 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
     }
 }
 
+type InterpreterResult<'a> = Result<(), InterpreterError<'a>>;
+
 pub(crate) struct InterpreterOps;
 
 impl InterpreterOps {
@@ -48,10 +50,10 @@ impl InterpreterOps {
         context: &mut InterpreterContext<'a>,
         stmts: &[StmtNode<'a>],
         env: EnvironmentRef<'a>,
-    ) -> Result<()> {
+    ) -> InterpreterResult<'a> {
         let prev = std::mem::replace(&mut context.environment, env);
         // try-catch
-        let mut eval_stmts = || -> Result<()> {
+        let mut eval_stmts = || -> Result<(), InterpreterError<'a>> {
             for stmt in stmts {
                 Self::eval_stmt(context, stmt)?;
             }
@@ -63,7 +65,10 @@ impl InterpreterOps {
         res
     }
 
-    fn eval_stmt<'a>(context: &mut InterpreterContext<'a>, stmt: &StmtNode<'a>) -> Result<()> {
+    fn eval_stmt<'a>(
+        context: &mut InterpreterContext<'a>,
+        stmt: &StmtNode<'a>,
+    ) -> InterpreterResult<'a> {
         match &*stmt.item {
             Stmt::Expression(expr) => Self::eval_expr(context, expr).map(|_| Ok(()))?,
             Stmt::Print(expr) => Self::eval_expr(context, expr).map(|v| {
@@ -104,6 +109,13 @@ impl InterpreterOps {
                     .define(declaration.name.item, fun.into());
                 Ok(())
             }
+            Stmt::Return(value) => match value {
+                Some(value) => {
+                    let value = Self::eval_expr(context, value)?;
+                    Err(InterpreterError::Return(value))
+                }
+                None => Ok(()),
+            },
         }
     }
 
@@ -185,9 +197,33 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Iterator for Interpreter<'a, I> {
     type Item = Result<()>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.statements
-            .next()
-            .map(|stmt| InterpreterOps::eval_stmt(&mut self.context, &stmt))
-            .or(None)
+        self.statements.next().map(|stmt| {
+            match InterpreterOps::eval_stmt(&mut self.context, &stmt) {
+                Ok(()) => Ok(()),
+                Err(InterpreterError::Return(value)) => {
+                    println!("{value}");
+                    Ok(())
+                }
+                Err(InterpreterError::Err(e)) => Err(e),
+            }
+        })
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum InterpreterError<'a> {
+    Return(Value<'a>),
+    Err(BolloxError),
+}
+
+impl<'a> From<Value<'a>> for InterpreterError<'a> {
+    fn from(value: Value<'a>) -> Self {
+        Self::Return(value)
+    }
+}
+
+impl<'a> From<BolloxError> for InterpreterError<'a> {
+    fn from(error: BolloxError) -> Self {
+        Self::Err(error)
     }
 }

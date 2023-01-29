@@ -39,6 +39,15 @@ where
 // Checks if the given pattern is next in the token stream
 // without consuming it.
 macro_rules! check {
+    ($this:ident, { $($pat:pat => $expr:expr),+ $(,)? }) => {
+        match $this.tokens.peek() {
+            $(Some(&$pat) => {
+                Some($expr)
+            }),+,
+            _ => None,
+        }
+    };
+
     ($this:ident, $($pat:pat),+ $(,)?) => {
         match $this.tokens.peek() {
             $(Some(&($pat, _)) => {
@@ -135,7 +144,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         let end = self.expect(Semicolon)?;
         Ok(Stmt::var(ident, init).at(var_span.union(end)))
     }
-    // statement -> expr_stmt | print_stmt | block_stmt | if_stmt | while_stmt ;
+    // statement -> expr_stmt | print_stmt | block_stmt | if_stmt | while_stmt | return_stmt ;
     fn statement(&mut self) -> Result<StmtNode<'a>> {
         let stmt = check_consume!(self, {
             (Print, span) => self.print_stmt(span),
@@ -143,6 +152,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             (If, span) => self.if_stmt(span),
             (While, span) => self.while_stmt(span),
             (For, span) => self.for_stmt(span),
+            (Return, span) => self.return_stmt(span),
         });
         match stmt {
             Some(Ok(stmt)) => Ok(stmt),
@@ -275,6 +285,18 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         };
 
         Ok(body.at(for_span.union(body_span)))
+    }
+    // return_stmt -> "return" expression? ";" ;
+    fn return_stmt(&mut self, span: Span) -> Result<StmtNode<'a>> {
+        let value = check!(self, {
+            (Semicolon, _) => None,
+            _ => Some(self.expression()?)
+        })
+        .flatten();
+
+        let _ = self.expect(Semicolon)?;
+
+        Ok(Stmt::return_(value).at(span))
     }
     // expression -> assignment ;
     fn expression(&mut self) -> Result<ExprNode<'a>> {

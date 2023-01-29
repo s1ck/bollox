@@ -3,7 +3,7 @@ use std::rc::Rc;
 use std::time::SystemTime;
 
 use crate::env::Environment;
-use crate::interp::{InterpreterContext, InterpreterOps};
+use crate::interp::{InterpreterContext, InterpreterError, InterpreterOps};
 use crate::node::Node;
 use crate::stmt::{FunctionDeclaration, StmtNode};
 use crate::token::Span;
@@ -56,9 +56,13 @@ impl<'a> Callable<'a> for Function<'a> {
                 fun_environment.define(param.item, arg.clone());
             });
 
-        InterpreterOps::eval_stmts(context, &self.body, fun_environment.into())?;
-
-        Ok(Value::Nil)
+        match InterpreterOps::eval_stmts(context, &self.body, fun_environment.into()) {
+            Ok(()) => Ok(Value::Nil),
+            Err(e) => match e {
+                InterpreterError::Return(value) => Ok(value),
+                InterpreterError::Err(e) => Err(e),
+            },
+        }
     }
 
     fn arity(&self) -> usize {

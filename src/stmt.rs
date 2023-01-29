@@ -13,6 +13,7 @@ pub enum Stmt<'a> {
     Func(FunctionDeclaration<'a>),
     If(ExprNode<'a>, StmtNode<'a>, Option<StmtNode<'a>>),
     While(ExprNode<'a>, StmtNode<'a>),
+    Return(Option<ExprNode<'a>>),
 }
 
 impl<'a> Stmt<'a> {
@@ -68,6 +69,10 @@ impl<'a> Stmt<'a> {
             params: params.into(),
             body: body.into(),
         })
+    }
+
+    pub fn return_(value: Option<ExprNode<'a>>) -> Self {
+        Self::Return(value)
     }
 }
 

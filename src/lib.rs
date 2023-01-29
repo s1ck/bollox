@@ -19,7 +19,7 @@ use std::cell::Cell;
 
 pub use scanner::Source;
 
-pub(crate) type Result<T> = std::result::Result<T, BolloxError>;
+pub(crate) type Result<T, E = BolloxError> = std::result::Result<T, E>;
 
 pub fn run<T>(code: T) -> std::result::Result<(), BolloxErrors>
 where
