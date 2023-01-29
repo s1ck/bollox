@@ -149,7 +149,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn identifier(&mut self) -> TokenType {
-        self.advance_while(|c| c.is_alphanumeric());
+        self.advance_while(|c| matches!(c, '0'..='9' | 'A'..='Z' | 'a'..='z' | '_'));
         TokenType::from(&self.source.source[self.start..self.current])
     }
 
