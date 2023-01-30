@@ -31,16 +31,28 @@ fn run_repl() -> AppResult {
     let mut line = String::new();
 
     loop {
-        print!("> ");
-        std::io::stdout().flush()?;
+        let mut prompt = "> ";
         line.clear();
-        stdin.read_line(&mut line)?;
-        let line = line.trim();
+
+        loop {
+            print!("{prompt}");
+            std::io::stdout().flush()?;
+            prompt = ". ";
+            stdin.read_line(&mut line)?;
+            line = line.trim().to_string();
+
+            if !line.ends_with('\\') {
+                break;
+            }
+
+            line = line.trim_end_matches('\\').to_string();
+        }
+
         if line == "quit" {
             break;
         }
 
-        if let Err(bollox_errors) = bollox::run(line) {
+        if let Err(bollox_errors) = bollox::run(&line) {
             println!("{:?}", miette::Report::new(bollox_errors))
         }
     }
