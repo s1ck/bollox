@@ -4,7 +4,7 @@ use crate::{
     error::{BolloxError, SyntaxError},
     expr::{BinaryOp, Expr, ExprNode, Literal, LogicalOp, UnaryOp},
     node::Node,
-    stmt::{FunctionKind, Stmt, StmtNode},
+    stmt::{Stmt, StmtNode},
     token::{Span, Token, TokenType},
     Result, Source,
 };
@@ -109,7 +109,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     fn declaration(&mut self) -> Result<StmtNode<'a>> {
         let res = check_consume!(self, {
             (Var, span) => self.var_decl(span),
-            (Fun, span) => self.function(FunctionKind::Function, span),
+            (Fun, span) => self.function(span),
         })
         .transpose()?;
 
@@ -126,7 +126,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     }
     // fun_decl -> "fun" function ;
     // function -> IDENTIFIER "(" parameters? ")" block ;
-    fn function(&mut self, kind: FunctionKind, fun_span: Span) -> Result<StmtNode<'a>> {
+    fn function(&mut self, fun_span: Span) -> Result<StmtNode<'a>> {
         let ident = self.identifier(fun_span)?;
         let span = self.expect(LeftParen)?;
         let (params, _) = self.arguments(span, |parser, span| parser.identifier(span))?;
@@ -134,7 +134,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         let (stmts, span) = self.scoped_declarations()?;
         let span = ident.span.union(span);
 
-        Ok(Stmt::func(ident, kind, params, stmts).at(span))
+        Ok(Stmt::func(ident, params, stmts).at(span))
     }
 
     // var_decl -> "var" IDENTIFER ( "=" expression )? ";" ;
@@ -383,7 +383,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
                 (LeftParen, span) => {
                     let (args, closing) = self.arguments(span, |parser, _| parser.expression())?;
                     let span = expr.span.union(closing);
-                    expr = Expr::call(FunctionKind::Function, expr, args.into()).at(span);
+                    expr = Expr::call(expr, args.into()).at(span);
                 }
             });
 

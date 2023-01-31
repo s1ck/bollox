@@ -1,6 +1,7 @@
 use std::fmt::Display;
 use std::{cmp::Ordering, rc::Rc};
 
+use crate::callable::{Builtins, Callables};
 use crate::{
     callable::Function,
     error::RuntimeError,
@@ -16,7 +17,8 @@ pub enum Value<'a> {
     Boolean(bool),
     Number(f64),
     Str(Rc<str>),
-    Func(Rc<Function<'a>>),
+    Fn(Rc<Function<'a>>),
+    Builtin(Rc<Builtins>),
 }
 
 impl<'a> From<Literal<'_>> for Value<'a> {
@@ -38,7 +40,8 @@ impl<'a> Display for Value<'a> {
             Value::Boolean(b) => b.fmt(f),
             Value::Number(n) => n.fmt(f),
             Value::Str(s) => s.fmt(f),
-            Value::Func(fun) => fun.fmt(f),
+            Value::Fn(fun) => fun.fmt(f),
+            Value::Builtin(b) => b.fmt(f),
         }
     }
 }
@@ -157,11 +160,13 @@ impl<'a> Value<'a> {
         Ok(Rc::clone(s))
     }
 
-    pub(crate) fn as_func(&self, span: Span) -> Result<Rc<Function<'a>>> {
-        let Value::Func(f) = self else {
-           return Err(RuntimeError::non_func(self, span))
+    pub(crate) fn as_callable(&self, _span: Span) -> Result<Callables<'a>> {
+        let callable = match self {
+            Value::Fn(f) => Callables::Fn(Rc::clone(f)),
+            Value::Builtin(b) => Callables::Builtin(Rc::clone(b)),
+            _ => todo!("non_callable error"),
         };
-        Ok(Rc::clone(f))
+        Ok(callable)
     }
 
     fn partial_cmp(&self, rhs: &Self) -> Option<Ordering> {
@@ -195,6 +200,6 @@ impl<'a> From<String> for Value<'a> {
 
 impl<'a> From<Function<'a>> for Value<'a> {
     fn from(f: Function<'a>) -> Self {
-        Value::Func(Rc::from(f))
+        Value::Fn(Rc::from(f))
     }
 }

@@ -57,15 +57,9 @@ impl<'a> Stmt<'a> {
         Self::While(condition, stmt)
     }
 
-    pub fn func(
-        name: Node<&'a str>,
-        kind: FunctionKind,
-        params: Vec<Node<&'a str>>,
-        body: Vec<StmtNode<'a>>,
-    ) -> Self {
+    pub fn func(name: Node<&'a str>, params: Vec<Node<&'a str>>, body: Vec<StmtNode<'a>>) -> Self {
         Self::Func(FunctionDeclaration {
             name,
-            kind,
             params: params.into(),
             body: body.into(),
         })
@@ -76,15 +70,9 @@ impl<'a> Stmt<'a> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum FunctionKind {
-    Function,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct FunctionDeclaration<'a> {
     pub(crate) name: Node<&'a str>,
-    pub(crate) kind: FunctionKind,
     pub(crate) params: Rc<[Node<&'a str>]>,
     pub(crate) body: Rc<[StmtNode<'a>]>,
 }

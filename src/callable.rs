@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::env::Environment;
 use crate::interp::{InterpreterContext, InterpreterError, InterpreterOps};
@@ -11,6 +11,8 @@ use crate::value::Value;
 use crate::Result;
 
 pub(crate) trait Callable<'a> {
+    fn name(&self) -> &str;
+
     fn call(
         &self,
         context: &mut InterpreterContext<'a>,
@@ -21,7 +23,41 @@ pub(crate) trait Callable<'a> {
     fn arity(&self) -> usize;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug)]
+pub(crate) enum Callables<'a> {
+    Fn(Rc<Function<'a>>),
+    Builtin(Rc<Builtins>),
+}
+
+impl<'a> Callable<'a> for Callables<'a> {
+    fn name(&self) -> &str {
+        match self {
+            Callables::Fn(f) => f.name(),
+            Callables::Builtin(b) => b.name(),
+        }
+    }
+
+    fn call(
+        &self,
+        context: &mut InterpreterContext<'a>,
+        args: &[Value<'a>],
+        span: Span,
+    ) -> Result<Value<'a>> {
+        match self {
+            Callables::Fn(f) => f.call(context, args, span),
+            Callables::Builtin(b) => b.call(context, args, span),
+        }
+    }
+
+    fn arity(&self) -> usize {
+        match self {
+            Callables::Fn(f) => f.arity(),
+            Callables::Builtin(b) => b.arity(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Function<'a> {
     name: &'a str,
     params: Rc<[Node<&'a str>]>,
@@ -39,6 +75,10 @@ impl<'a> Function<'a> {
 }
 
 impl<'a> Callable<'a> for Function<'a> {
+    fn name(&self) -> &str {
+        self.name
+    }
+
     fn call(
         &self,
         context: &mut InterpreterContext<'a>,
@@ -76,11 +116,54 @@ impl<'a> Display for Function<'a> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum Builtins {
+    Clock(Clock),
+}
+
+impl<'a> Callable<'a> for Builtins {
+    fn name(&self) -> &str {
+        match self {
+            Builtins::Clock(c) => c.name(),
+        }
+    }
+
+    fn call(
+        &self,
+        context: &mut InterpreterContext<'a>,
+        args: &[Value<'a>],
+        span: Span,
+    ) -> Result<Value<'a>> {
+        match self {
+            Builtins::Clock(c) => c.call(context, args, span),
+        }
+    }
+
+    fn arity(&self) -> usize {
+        match self {
+            Builtins::Clock(c) => c.arity(),
+        }
+    }
+}
+
+impl Display for Builtins {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Builtins::Clock(c) => c.name(),
+        };
+        write!(f, "<native fn {name}>")
+    }
+}
+
 // Built-in function (the only one really)
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct Clock;
 
 impl<'a> Callable<'a> for Clock {
+    fn name(&self) -> &str {
+        "clock"
+    }
+
     fn call(
         &self,
         _: &mut InterpreterContext<'a>,
@@ -88,7 +171,7 @@ impl<'a> Callable<'a> for Clock {
         _span: Span,
     ) -> Result<Value<'a>> {
         Ok(SystemTime::now()
-            .elapsed()
+            .duration_since(UNIX_EPOCH)
             .map_or(0.0, |d| d.as_secs_f64())
             .into())
     }

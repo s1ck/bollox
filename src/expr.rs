@@ -1,6 +1,6 @@
 use std::{fmt::Display, rc::Rc};
 
-use crate::{node::Node, stmt::FunctionKind, token::Span};
+use crate::{node::Node, token::Span};
 
 pub type ExprNode<'a> = Node<Box<Expr<'a>>>;
 
@@ -16,7 +16,6 @@ pub enum Expr<'a> {
         rhs: ExprNode<'a>,
     },
     Call {
-        kind: FunctionKind,
         callee: ExprNode<'a>,
         args: Rc<[ExprNode<'a>]>,
     },
@@ -69,8 +68,8 @@ impl<'a> Expr<'a> {
         Self::Group { expr }
     }
 
-    pub fn call(kind: FunctionKind, callee: ExprNode<'a>, args: Rc<[ExprNode<'a>]>) -> Self {
-        Self::Call { kind, callee, args }
+    pub fn call(callee: ExprNode<'a>, args: Rc<[ExprNode<'a>]>) -> Self {
+        Self::Call { callee, args }
     }
 
     pub fn literal(lit: Literal<'a>) -> Self {

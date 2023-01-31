@@ -1,6 +1,9 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::value::Value;
+use crate::{
+    callable::{Builtins, Callable, Clock},
+    value::Value,
+};
 
 pub(crate) type EnvironmentRef<'a> = Rc<RefCell<Environment<'a>>>;
 
@@ -54,6 +57,17 @@ impl<'a> Environment<'a> {
 impl<'a> From<Environment<'a>> for EnvironmentRef<'a> {
     fn from(env: Environment<'a>) -> Self {
         Rc::new(RefCell::new(env))
+    }
+}
+
+impl<'a> Default for Environment<'a> {
+    fn default() -> Self {
+        let mut globals = Environment::new();
+        globals.define(
+            Clock.name(),
+            Value::Builtin(Rc::new(Builtins::Clock(Clock))),
+        );
+        globals
     }
 }
 

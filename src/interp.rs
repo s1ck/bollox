@@ -3,7 +3,7 @@ use crate::{
     env::{Environment, EnvironmentRef},
     error::{BolloxError, RuntimeError, SyntaxError},
     expr::{BinaryOp, Expr, ExprNode, LogicalOp, UnaryOp},
-    stmt::{FunctionKind, Stmt, StmtNode},
+    stmt::{Stmt, StmtNode},
     value::Value,
     Result,
 };
@@ -27,7 +27,7 @@ pub(crate) struct InterpreterContext<'a> {
 
 impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
     fn new(statements: I) -> Self {
-        let globals: EnvironmentRef = Environment::new().into();
+        let globals: EnvironmentRef = Environment::default().into();
 
         let context = InterpreterContext {
             globals: globals.clone(),
@@ -114,7 +114,7 @@ impl InterpreterOps {
                     let value = Self::eval_expr(context, value)?;
                     Err(InterpreterError::Return(value))
                 }
-                None => Ok(()),
+                None => Err(InterpreterError::Return(Value::Nil)),
             },
         }
     }
@@ -169,12 +169,10 @@ impl InterpreterOps {
                     _ => Self::eval_expr(context, rhs)?,
                 }
             }
-            Expr::Call { kind, callee, args } => {
+            Expr::Call { callee, args } => {
                 let span = callee.span;
                 let callee = Self::eval_expr(context, callee)?;
-                let callable = match kind {
-                    FunctionKind::Function => callee.as_func(span)?,
-                };
+                let callable = callee.as_callable(span)?;
 
                 let args = args
                     .iter()
