@@ -1,5 +1,9 @@
-use std::io::Write;
 use std::path::Path;
+
+use reedline::{
+    default_emacs_keybindings, DefaultPrompt, DefaultPromptSegment, EditCommand, Emacs, KeyCode,
+    KeyModifiers, Prompt, Reedline, ReedlineEvent, Signal,
+};
 
 type AppResult = Result<(), std::io::Error>;
 
@@ -27,34 +31,39 @@ fn run_file(file: impl AsRef<Path>) -> AppResult {
 }
 
 fn run_repl() -> AppResult {
-    let stdin = std::io::stdin();
-    let mut line = String::new();
+    let mut line_editor = line_editor();
+    let prompt = prompt();
 
     loop {
-        let mut prompt = "> ";
-        line.clear();
-
-        loop {
-            print!("{prompt}");
-            std::io::stdout().flush()?;
-            prompt = ". ";
-            stdin.read_line(&mut line)?;
-            line = line.trim().to_string();
-
-            if !line.ends_with('\\') {
-                break;
-            }
-
-            line = line.trim_end_matches('\\').to_string();
-        }
-
-        if line == "quit" {
-            break;
-        }
+        let sig = line_editor.read_line(&prompt);
+        let line = match sig {
+            Ok(Signal::Success(buffer)) => buffer,
+            Ok(Signal::CtrlC) | Ok(Signal::CtrlD) => break,
+            _ => todo!(),
+        };
 
         if let Err(bollox_errors) = bollox::run(&line) {
             println!("{:?}", miette::Report::new(bollox_errors))
         }
     }
     Ok(())
+}
+
+fn line_editor() -> Reedline {
+    let mut keybindings = default_emacs_keybindings();
+
+    keybindings.add_binding(
+        KeyModifiers::ALT,
+        KeyCode::Enter,
+        ReedlineEvent::Edit(vec![EditCommand::InsertNewline]),
+    );
+
+    Reedline::create().with_edit_mode(Box::new(Emacs::new(keybindings)))
+}
+
+fn prompt() -> impl Prompt {
+    DefaultPrompt {
+        left_prompt: DefaultPromptSegment::Empty,
+        right_prompt: DefaultPromptSegment::Empty,
+    }
 }
