@@ -35,27 +35,29 @@ fn run_repl() -> AppResult {
     let mut stdout = stdout().into_raw_mode()?;
 
     let mut line = String::new();
-    let prompt = ">";
 
     write!(
         stdout,
-        "{}{}{}>{}",
+        "{}{}{}",
         termion::clear::All,
         termion::cursor::Goto(1, 1),
         termion::cursor::Hide,
-        termion::cursor::Goto(3, 1),
     )?;
 
     loop {
         let stdin = stdin.lock();
-        let mut stdout = stdout.lock();
+
+        write!(stdout, ">{}", termion::cursor::Goto(3, 1))?;
 
         stdout.flush()?;
 
         for c in stdin.keys() {
             match c? {
                 Key::Ctrl('c') => return Ok(()),
-                Key::Char('\n') => break,
+                Key::Char('\n') => {
+                    line.push('\n');
+                    break;
+                }
                 Key::Char(c) => {
                     line.push(c);
                     write!(stdout, "{}", c)?
@@ -85,11 +87,13 @@ fn run_repl() -> AppResult {
             break;
         }
 
+        stdout.suspend_raw_mode()?;
         if let Err(bollox_errors) = bollox::run(&line) {
-            let mut stdout = std::io::stdout();
-            // println!("{:?}", miette::Report::new(bollox_errors));
             write!(stdout, "{:?}", miette::Report::new(bollox_errors))?;
         }
+        stdout.activate_raw_mode()?;
+
+        line.clear();
     }
     Ok(())
 }
