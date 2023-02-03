@@ -184,8 +184,8 @@ pub enum RuntimeError {
         span: SourceSpan,
     },
 
-    #[error("Expected function, got {:?}.", found)]
-    NonFunc {
+    #[error("Expected callable, got {:?}.", found)]
+    NonCallable {
         found: String,
         #[label("{}", self)]
         span: SourceSpan,
@@ -226,8 +226,8 @@ impl RuntimeError {
         .into()
     }
 
-    pub fn non_func(found: impl Display, span: Span) -> BolloxError {
-        Self::NonFunc {
+    pub fn non_callable(found: impl Display, span: Span) -> BolloxError {
+        Self::NonCallable {
             found: found.to_string(),
             span: span.into(),
         }

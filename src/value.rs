@@ -160,11 +160,11 @@ impl<'a> Value<'a> {
         Ok(Rc::clone(s))
     }
 
-    pub(crate) fn as_callable(&self, _span: Span) -> Result<Callables<'a>> {
+    pub(crate) fn as_callable(&self, span: Span) -> Result<Callables<'a>> {
         let callable = match self {
             Value::Fn(f) => Callables::Fn(Rc::clone(f)),
             Value::Builtin(b) => Callables::Builtin(Rc::clone(b)),
-            _ => todo!("non_callable error"),
+            v => return Err(RuntimeError::non_callable(v, span)),
         };
         Ok(callable)
     }
