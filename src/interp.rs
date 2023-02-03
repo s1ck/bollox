@@ -102,7 +102,7 @@ impl InterpreterOps {
                 Ok(())
             }
             Stmt::Func(declaration) => {
-                let fun = Function::new(declaration);
+                let fun = Function::new(declaration, context.environment.clone());
                 context
                     .environment
                     .borrow_mut()

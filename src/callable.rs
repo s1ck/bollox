@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display};
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::env::Environment;
+use crate::env::{Environment, EnvironmentRef};
 use crate::interp::{InterpreterContext, InterpreterError, InterpreterOps};
 use crate::node::Node;
 use crate::stmt::{FunctionDeclaration, StmtNode};
@@ -62,14 +62,16 @@ pub struct Function<'a> {
     name: &'a str,
     params: Rc<[Node<&'a str>]>,
     body: Rc<[StmtNode<'a>]>,
+    closure: EnvironmentRef<'a>,
 }
 
 impl<'a> Function<'a> {
-    pub(crate) fn new(declaration: &FunctionDeclaration<'a>) -> Self {
+    pub(crate) fn new(declaration: &FunctionDeclaration<'a>, closure: EnvironmentRef<'a>) -> Self {
         Self {
             name: declaration.name.item,
             params: Rc::clone(&declaration.params),
             body: Rc::clone(&declaration.body),
+            closure,
         }
     }
 }
@@ -85,8 +87,10 @@ impl<'a> Callable<'a> for Function<'a> {
         args: &[Value<'a>],
         _span: Span,
     ) -> Result<Value<'a>> {
-        // each function call needs it's own environment to support recursion
-        let mut fun_environment = Environment::with_enclosing(context.globals.clone());
+        // Each function call needs it's own environment to support recursion.
+        // The enclosing environment is the one that is active when the method
+        // is declared. This also gives access to globals in order to call funcs.
+        let mut fun_environment = Environment::with_enclosing(self.closure.clone());
 
         // register param -> arg mappings in the local environment
         self.params
