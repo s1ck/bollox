@@ -35,11 +35,10 @@ fn run_repl() -> AppResult {
     let prompt = prompt();
 
     loop {
-        let sig = line_editor.read_line(&prompt);
+        let sig = line_editor.read_line(&prompt)?;
         let line = match sig {
-            Ok(Signal::Success(buffer)) => buffer,
-            Ok(Signal::CtrlC) | Ok(Signal::CtrlD) => break,
-            _ => todo!(),
+            Signal::Success(buffer) => buffer,
+            Signal::CtrlC | Signal::CtrlD => break,
         };
 
         if let Err(bollox_errors) = bollox::run(&line) {
