@@ -21,17 +21,21 @@ pub struct Interpreter<'a, I: Iterator<Item = StmtNode<'a>>> {
 }
 
 pub(crate) struct InterpreterContext<'a> {
-    pub(crate) globals: EnvironmentRef<'a>,
     pub(crate) environment: EnvironmentRef<'a>,
+}
+
+impl<'a> Default for InterpreterContext<'a> {
+    fn default() -> Self {
+        Self {
+            environment: Environment::default().into(),
+        }
+    }
 }
 
 impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
     fn new(statements: I) -> Self {
-        let globals: EnvironmentRef = Environment::default().into();
-
         let context = InterpreterContext {
-            globals: globals.clone(),
-            environment: globals,
+            environment: Environment::default().into(),
         };
 
         Self {
