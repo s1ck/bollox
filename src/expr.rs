@@ -91,14 +91,10 @@ impl<'a> Expr<'a> {
         Self::Assign { name, expr }
     }
 
-    pub fn lambda(
-        name: Node<&'a str>,
-        params: Vec<Node<&'a str>>,
-        body: Vec<StmtNode<'a>>,
-    ) -> Self {
+    pub fn lambda(params: Vec<Node<&'a str>>, body: Vec<StmtNode<'a>>, span: Span) -> Self {
         Self::Lambda {
             declaration: FunctionDeclaration {
-                name,
+                name: Node::new("<fn lambda>", span),
                 params: params.into(),
                 body: body.into(),
             },

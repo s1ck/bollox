@@ -316,11 +316,8 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     fn lambda(&mut self) -> Result<ExprNode<'a>> {
         let (params, start) = self.function_params()?;
         let (body, end) = self.scoped_declarations()?;
-
         let span = start.union(end);
-
-        let name = Node::new("<fn lambda>", span.clone());
-        let lambda = Expr::lambda(name, params, body).at(span);
+        let lambda = Expr::lambda(params, body, span.clone().into()).at(span);
 
         return Ok(lambda);
     }

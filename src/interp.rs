@@ -190,14 +190,7 @@ impl InterpreterOps {
                 callable.call(context, &args, span)?
             }
             Expr::Lambda { declaration } => {
-                let fun: Value = Function::new(declaration, context.environment.clone()).into();
-
-                context
-                    .environment
-                    .borrow_mut()
-                    .define(declaration.name.item, fun.clone());
-
-                fun
+                Function::new(declaration, context.environment.clone()).into()
             }
         };
 
