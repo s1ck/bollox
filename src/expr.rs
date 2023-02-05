@@ -1,6 +1,10 @@
 use std::{fmt::Display, rc::Rc};
 
-use crate::{node::Node, token::Span};
+use crate::{
+    node::Node,
+    stmt::{FunctionDeclaration, StmtNode},
+    token::Span,
+};
 
 pub type ExprNode<'a> = Node<Box<Expr<'a>>>;
 
@@ -36,6 +40,9 @@ pub enum Expr<'a> {
     Assign {
         name: &'a str,
         expr: ExprNode<'a>,
+    },
+    Lambda {
+        declaration: FunctionDeclaration<'a>,
     },
 }
 
@@ -82,6 +89,20 @@ impl<'a> Expr<'a> {
 
     pub fn assign(name: &'a str, expr: ExprNode<'a>) -> Self {
         Self::Assign { name, expr }
+    }
+
+    pub fn lambda(
+        name: Node<&'a str>,
+        params: Vec<Node<&'a str>>,
+        body: Vec<StmtNode<'a>>,
+    ) -> Self {
+        Self::Lambda {
+            declaration: FunctionDeclaration {
+                name,
+                params: params.into(),
+                body: body.into(),
+            },
+        }
     }
 
     pub fn string(s: &'a str) -> Self {

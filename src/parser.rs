@@ -128,15 +128,21 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     // function -> IDENTIFIER "(" parameters? ")" block ;
     fn function(&mut self, fun_span: Span) -> Result<StmtNode<'a>> {
         let ident = self.identifier(fun_span)?;
-        let span = self.expect(LeftParen)?;
-        let (params, _) = self.arguments(span, |parser, span| parser.identifier(span))?;
-        let _ = self.expect(LeftBrace)?;
-        let (stmts, span) = self.scoped_declarations()?;
+        let (parameters, _) = self.function_params()?;
+        let (block, span) = self.scoped_declarations()?;
+
         let span = ident.span.union(span);
 
-        Ok(Stmt::func(ident, params, stmts).at(span))
+        Ok(Stmt::func(ident, parameters, block).at(span))
     }
+    // function_params -> "(" parameters? ")" ;
+    fn function_params(&mut self) -> Result<(Vec<Node<&'a str>>, Span)> {
+        let span = self.expect(LeftParen)?;
+        let params = self.arguments(span, |parser, span| parser.identifier(span))?;
+        let _ = self.expect(LeftBrace)?;
 
+        Ok(params)
+    }
     // var_decl -> "var" IDENTIFER ( "=" expression )? ";" ;
     fn var_decl(&mut self, var_span: Span) -> Result<StmtNode<'a>> {
         let ident = self.identifier(var_span)?;
@@ -298,9 +304,25 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
 
         Ok(Stmt::return_(value).at(span))
     }
-    // expression -> assignment ;
+    // expression -> lambda | assignment ;
     fn expression(&mut self) -> Result<ExprNode<'a>> {
-        self.assignment()
+        if check_consume!(self, Fun) {
+            self.lambda()
+        } else {
+            self.assignment()
+        }
+    }
+    // function -> IDENTIFIER "(" parameters? ")" block ;
+    fn lambda(&mut self) -> Result<ExprNode<'a>> {
+        let (params, start) = self.function_params()?;
+        let (body, end) = self.scoped_declarations()?;
+
+        let span = start.union(end);
+
+        let name = Node::new("<fn lambda>", span.clone());
+        let lambda = Expr::lambda(name, params, body).at(span);
+
+        return Ok(lambda);
     }
     // assignment -> IDENTIFIER "=" assignment | logic_or ;
     fn assignment(&mut self) -> Result<ExprNode<'a>> {
