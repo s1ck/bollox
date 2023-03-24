@@ -7,14 +7,16 @@ mod expr;
 mod interp;
 mod node;
 mod parser;
+mod resolver;
 mod scanner;
 mod stmt;
 mod util;
 mod value;
 
+use crate::interp::interpreter;
 use crate::parser::parser;
+use crate::resolver::resolver;
 use error::{BolloxError, BolloxErrors};
-use interp::interpreter;
 use std::cell::Cell;
 
 pub use scanner::Source;
@@ -45,6 +47,15 @@ where
 
     // parse (tokens -> statements)
     let statements = parser(source, tokens).filter_map(|stmt| match stmt {
+        Ok(e) => Some(e),
+        Err(e) => {
+            store_err(e);
+            None
+        }
+    });
+
+    // resolver (statements -> statements)
+    let statements = resolver(statements).filter_map(|stmt| match stmt {
         Ok(e) => Some(e),
         Err(e) => {
             store_err(e);
