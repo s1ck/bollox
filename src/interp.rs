@@ -8,7 +8,10 @@ use crate::{
     Result,
 };
 
-pub fn interpreter<'a, I>(statements: I) -> Interpreter<'a, I::IntoIter>
+pub fn interpreter<'a, I>(
+    statements: I,
+    _context: InterpreterContext<'a>,
+) -> Interpreter<'a, I::IntoIter>
 where
     I: IntoIterator<Item = StmtNode<'a>>,
 {
@@ -20,7 +23,7 @@ pub struct Interpreter<'a, I: Iterator<Item = StmtNode<'a>>> {
     statements: I,
 }
 
-pub(crate) struct InterpreterContext<'a> {
+pub struct InterpreterContext<'a> {
     pub(crate) environment: EnvironmentRef<'a>,
 }
 
