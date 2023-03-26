@@ -97,8 +97,7 @@ impl ResolverOps {
             Expr::Call { callee, args } => {
                 Self::resolve_expr(context, callee)?;
                 args.iter()
-                    .map(|arg| Self::resolve_expr(context, arg))
-                    .collect::<Result<()>>()?;
+                    .try_for_each(|arg| Self::resolve_expr(context, arg))?;
                 Ok(())
             }
             Expr::Logical { lhs, op: _, rhs } => {
@@ -109,12 +108,16 @@ impl ResolverOps {
             Expr::Group { expr } => Self::resolve_expr(context, expr),
             Expr::Literal { lit: _ } => Ok(()),
             Expr::Variable { name } => match context.var_state(name) {
-                Some(VarState::Defined) | None => Ok(context.resolve_local(expr, name)),
+                Some(VarState::Defined) | None => {
+                    context.resolve_local(expr, name);
+                    Ok(())
+                }
                 _ => todo!("error: can't read local variable in its own initializer"),
             },
             Expr::Assign { name, expr } => {
                 Self::resolve_expr(context, expr)?;
-                Ok(context.resolve_local(expr, name))
+                context.resolve_local(expr, name);
+                Ok(())
             }
             Expr::Lambda { declaration } => Self::resolve_function(context, declaration),
         }
@@ -123,8 +126,7 @@ impl ResolverOps {
     fn resolve_stmts<'a>(context: &mut ResolverContext<'a>, stmts: &[StmtNode<'a>]) -> Result<()> {
         stmts
             .iter()
-            .map(|stmt| Self::resolve_stmt(context, stmt))
-            .collect::<Result<()>>()
+            .try_for_each(|stmt| Self::resolve_stmt(context, stmt))
     }
 
     fn resolve_block<'a>(context: &mut ResolverContext<'a>, stmts: &[StmtNode<'a>]) -> Result<()> {
@@ -160,7 +162,7 @@ impl ResolverOps {
             context.declare(param.item);
             context.define(param.item);
         });
-        Self::resolve_stmts(context, &*declaration.body)?;
+        Self::resolve_stmts(context, &declaration.body)?;
         context.end_scope();
         Ok(())
     }
