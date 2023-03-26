@@ -109,7 +109,7 @@ impl ResolverOps {
             Expr::Group { expr } => Self::resolve_expr(context, expr),
             Expr::Literal { lit: _ } => Ok(()),
             Expr::Variable { name } => match context.var_state(name) {
-                Some(VarState::Defined) => Ok(context.resolve_local(expr, name)),
+                Some(VarState::Defined) | None => Ok(context.resolve_local(expr, name)),
                 _ => todo!("error: can't read local variable in its own initializer"),
             },
             Expr::Assign { name, expr } => {
@@ -174,7 +174,7 @@ pub(crate) struct ResolverContext<'a> {
     scopes: Vec<HashMap<&'a str, VarState>>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum VarState {
     Declared,
     Defined,
@@ -221,14 +221,15 @@ impl<'a> ResolverContext<'a> {
 
     // Finds the innermost scope, that contains the given variable name.
     // Uses the index of that scope to resolve the expression.
-    fn resolve_local(&mut self, _expr: &ExprNode<'a>, name: &'a str) {
-        let _depth = self
+    fn resolve_local(&mut self, expr: &ExprNode<'a>, name: &'a str) {
+        match self
             .scopes
             .iter()
             .rev()
             .position(|scope| scope.contains_key(name))
-            .unwrap();
-
-        todo!("interpreter.resolve(expr, depth)");
+        {
+            Some(depth) => self.interpreter.locals.insert(expr.span, depth),
+            None => None,
+        };
     }
 }

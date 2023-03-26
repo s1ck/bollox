@@ -23,7 +23,7 @@ impl Token {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Span {
     pub offset: usize,
     pub len: usize,
