@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
+    error::ResolverError,
     expr::{Expr, ExprNode},
     interp::InterpreterContext,
     node::Node,
@@ -112,7 +113,7 @@ impl ResolverOps {
                     context.resolve_local(expr, name);
                     Ok(())
                 }
-                _ => todo!("error: can't read local variable in its own initializer"),
+                _ => Err(ResolverError::undefined_variable(*name, expr.span)),
             },
             Expr::Assign { name, expr } => {
                 Self::resolve_expr(context, expr)?;

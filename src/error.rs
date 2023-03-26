@@ -30,6 +30,10 @@ pub enum BolloxError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    ResolverError(#[from] ResolverError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     RuntimeError(#[from] RuntimeError),
 }
 
@@ -165,6 +169,26 @@ impl SyntaxError {
 
     pub fn too_many_arguments(span: Span) -> BolloxError {
         Self::TooManyArguments { span: span.into() }.into()
+    }
+}
+
+#[derive(Clone, Debug, Error, Diagnostic)]
+pub enum ResolverError {
+    #[error("Variable is declared, but not yet defined: `{}`.", name)]
+    UndefinedVariable {
+        name: String,
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+}
+
+impl ResolverError {
+    pub fn undefined_variable(name: impl Into<String>, span: Span) -> BolloxError {
+        Self::UndefinedVariable {
+            name: name.into(),
+            span: span.into(),
+        }
+        .into()
     }
 }
 
