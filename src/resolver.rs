@@ -142,7 +142,9 @@ impl ResolverOps {
         name: &Node<&'a str>,
         initializer: &Option<ExprNode<'a>>,
     ) -> Result<()> {
-        context.declare(name.item);
+        if context.declare(name.item).is_some() {
+            return Err(ResolverError::redefined_variable(name.item, name.span));
+        }
         if let Some(expr) = initializer {
             Self::resolve_expr(context, expr)?;
         }
@@ -155,7 +157,12 @@ impl ResolverOps {
         declaration: &FunctionDeclaration<'a>,
     ) -> Result<()> {
         // resolve function name first, to allow for recursive calls
-        context.declare(declaration.name.item);
+        if context.declare(declaration.name.item).is_some() {
+            return Err(ResolverError::redefined_function(
+                declaration.name.item,
+                declaration.name.span,
+            ));
+        }
         context.define(declaration.name.item);
 
         context.begin_scope();
@@ -201,11 +208,11 @@ impl<'a> ResolverContext<'a> {
         self.scopes.pop();
     }
 
-    fn declare(&mut self, name: &'a str) {
+    fn declare(&mut self, name: &'a str) -> Option<VarState> {
         match self.scopes.last_mut() {
             Some(scope) => scope.insert(name, VarState::Declared),
             None => None,
-        };
+        }
     }
 
     fn define(&mut self, name: &'a str) {

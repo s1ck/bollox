@@ -180,11 +180,41 @@ pub enum ResolverError {
         #[label("{}", self)]
         span: SourceSpan,
     },
+
+    #[error("Variable already defined in this scope: `{}`", name)]
+    RedefinedVariable {
+        name: String,
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("Function already defined in this scope: `{}`", name)]
+    RedefinedFunction {
+        name: String,
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
 }
 
 impl ResolverError {
     pub fn undefined_variable(name: impl Into<String>, span: Span) -> BolloxError {
         Self::UndefinedVariable {
+            name: name.into(),
+            span: span.into(),
+        }
+        .into()
+    }
+
+    pub fn redefined_variable(name: impl Into<String>, span: Span) -> BolloxError {
+        Self::RedefinedVariable {
+            name: name.into(),
+            span: span.into(),
+        }
+        .into()
+    }
+
+    pub fn redefined_function(name: impl Into<String>, span: Span) -> BolloxError {
+        Self::RedefinedFunction {
             name: name.into(),
             span: span.into(),
         }
