@@ -79,6 +79,9 @@ impl ResolverOps {
                 Ok(())
             }
             Stmt::Return(value) => {
+                if context.depth == 0 {
+                    return Err(ResolverError::top_level_return(stmt.span));
+                }
                 if let Some(value) = value {
                     Self::resolve_expr(context, value)?
                 }
@@ -156,6 +159,7 @@ impl ResolverOps {
         context: &mut ResolverContext<'a>,
         declaration: &FunctionDeclaration<'a>,
     ) -> Result<()> {
+        context.begin_function();
         // resolve function name first, to allow for recursive calls
         if context.declare(declaration.name.item).is_some() {
             return Err(ResolverError::redefined_function(
@@ -172,6 +176,8 @@ impl ResolverOps {
         });
         Self::resolve_stmts(context, &declaration.body)?;
         context.end_scope();
+        context.end_function();
+
         Ok(())
     }
 }
@@ -182,6 +188,8 @@ pub(crate) struct ResolverContext<'a> {
     // `false` indicates that the variable exists,
     // but is not yet initialized.
     scopes: Vec<HashMap<&'a str, VarState>>,
+    // Function call depth
+    depth: usize,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -195,6 +203,7 @@ impl<'a> ResolverContext<'a> {
         Self {
             interpreter,
             scopes: Vec::new(),
+            depth: 0,
         }
     }
 
@@ -241,5 +250,13 @@ impl<'a> ResolverContext<'a> {
             Some(depth) => self.interpreter.locals.insert(expr.span, depth),
             None => None,
         };
+    }
+
+    fn begin_function(&mut self) {
+        self.depth += 1;
+    }
+
+    fn end_function(&mut self) {
+        self.depth -= 1;
     }
 }

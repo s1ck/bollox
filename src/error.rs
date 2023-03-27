@@ -194,6 +194,12 @@ pub enum ResolverError {
         #[label("{}", self)]
         span: SourceSpan,
     },
+
+    #[error("Can't return from top-level code")]
+    TopLevelReturn {
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
 }
 
 impl ResolverError {
@@ -219,6 +225,10 @@ impl ResolverError {
             span: span.into(),
         }
         .into()
+    }
+
+    pub fn top_level_return(span: Span) -> BolloxError {
+        Self::TopLevelReturn { span: span.into() }.into()
     }
 }
 
