@@ -43,6 +43,23 @@ impl<'a> Environment<'a> {
         }
     }
 
+    pub(crate) fn get_global(&self, name: &'a str) -> Option<Value<'a>> {
+        match &self.enclosing {
+            Some(enclosing) => enclosing.borrow().get_global(name),
+            None => self.get(name),
+        }
+    }
+
+    pub(crate) fn get_at(&self, name: &'a str, distance: usize) -> Option<Value<'a>> {
+        match distance {
+            0 => self.get(name),
+            d => match &self.enclosing {
+                Some(enclosing) => enclosing.borrow().get_at(name, d - 1),
+                None => None,
+            },
+        }
+    }
+
     pub(crate) fn assign(&mut self, name: &'a str, value: Value<'a>) -> Option<Value<'a>> {
         if self.values.contains_key(name) {
             return self.values.insert(name, value);
@@ -51,6 +68,28 @@ impl<'a> Environment<'a> {
         match &self.enclosing {
             Some(enc) => enc.borrow_mut().assign(name, value),
             None => None,
+        }
+    }
+
+    pub(crate) fn assign_global(&mut self, name: &'a str, value: Value<'a>) -> Option<Value<'a>> {
+        match &self.enclosing {
+            Some(enclosing) => enclosing.borrow_mut().assign_global(name, value),
+            None => self.assign(name, value),
+        }
+    }
+
+    pub(crate) fn assign_at(
+        &mut self,
+        name: &'a str,
+        value: Value<'a>,
+        distance: usize,
+    ) -> Option<Value<'a>> {
+        match distance {
+            0 => self.assign(name, value),
+            d => match &self.enclosing {
+                Some(enclosing) => enclosing.borrow_mut().assign_at(name, value, d - 1),
+                None => None,
+            },
         }
     }
 }

@@ -1,18 +1,24 @@
+use std::collections::HashMap;
+
 use crate::{
     callable::{Callable, Function},
     env::{Environment, EnvironmentRef},
     error::{BolloxError, RuntimeError, SyntaxError},
     expr::{BinaryOp, Expr, ExprNode, LogicalOp, UnaryOp},
     stmt::{Stmt, StmtNode},
+    token::Span,
     value::Value,
     Result,
 };
 
-pub fn interpreter<'a, I>(statements: I) -> Interpreter<'a, I::IntoIter>
+pub fn interpreter<'a, I>(
+    statements: I,
+    context: InterpreterContext<'a>,
+) -> Interpreter<'a, I::IntoIter>
 where
     I: IntoIterator<Item = StmtNode<'a>>,
 {
-    Interpreter::new(statements.into_iter())
+    Interpreter::new(statements.into_iter(), context)
 }
 
 pub struct Interpreter<'a, I: Iterator<Item = StmtNode<'a>>> {
@@ -20,24 +26,22 @@ pub struct Interpreter<'a, I: Iterator<Item = StmtNode<'a>>> {
     statements: I,
 }
 
-pub(crate) struct InterpreterContext<'a> {
+pub struct InterpreterContext<'a> {
     pub(crate) environment: EnvironmentRef<'a>,
+    pub(crate) locals: HashMap<Span, usize>,
 }
 
 impl<'a> Default for InterpreterContext<'a> {
     fn default() -> Self {
         Self {
             environment: Environment::default().into(),
+            locals: HashMap::new(),
         }
     }
 }
 
 impl<'a, I: Iterator<Item = StmtNode<'a>>> Interpreter<'a, I> {
-    fn new(statements: I) -> Self {
-        let context = InterpreterContext {
-            environment: Environment::default().into(),
-        };
-
+    fn new(statements: I, context: InterpreterContext<'a>) -> Self {
         Self {
             context,
             statements,
@@ -129,17 +133,8 @@ impl InterpreterOps {
     ) -> Result<Value<'a>> {
         let span = expr.span;
         let value = match &*expr.item {
-            Expr::Variable { name } => match context.environment.borrow().get(name) {
-                Some(value) => value,
-                None => return Err(SyntaxError::undefined_variable(*name, span)),
-            },
-            Expr::Assign { name, expr } => {
-                let value = Self::eval_expr(context, expr)?;
-                match context.environment.borrow_mut().assign(name, value.clone()) {
-                    Some(_) => value,
-                    None => return Err(SyntaxError::undefined_variable(*name, span)),
-                }
-            }
+            Expr::Variable { name } => Self::get_var(context, expr, name)?,
+            Expr::Assign { name, expr } => Self::assign_var(context, expr, name)?,
             Expr::Literal { lit } => Value::from(*lit),
             Expr::Group { expr } => Self::eval_expr(context, expr)?,
             Expr::Unary { op, expr } => {
@@ -195,6 +190,44 @@ impl InterpreterOps {
         };
 
         Ok(value)
+    }
+
+    // Resolves a var expression either from local or global scope.
+    fn get_var<'a>(
+        context: &mut InterpreterContext<'a>,
+        expr: &ExprNode<'a>,
+        name: &'a str,
+    ) -> Result<Value<'a>> {
+        context
+            .locals
+            .get(&expr.span)
+            .and_then(|distance| context.environment.borrow().get_at(name, *distance))
+            .or_else(|| context.environment.borrow().get_global(name))
+            .ok_or(SyntaxError::undefined_variable(name, expr.span))
+    }
+
+    fn assign_var<'a>(
+        context: &mut InterpreterContext<'a>,
+        expr: &ExprNode<'a>,
+        name: &'a str,
+    ) -> Result<Value<'a>> {
+        let value = Self::eval_expr(context, expr)?;
+        context
+            .locals
+            .get(&expr.span)
+            .and_then(|distance| {
+                context
+                    .environment
+                    .borrow_mut()
+                    .assign_at(name, value.clone(), *distance)
+            })
+            .or_else(|| {
+                context
+                    .environment
+                    .borrow_mut()
+                    .assign_global(name, value.clone())
+            })
+            .ok_or(SyntaxError::undefined_variable(name, expr.span))
     }
 }
 

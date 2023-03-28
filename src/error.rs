@@ -30,6 +30,10 @@ pub enum BolloxError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    ResolverError(#[from] ResolverError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     RuntimeError(#[from] RuntimeError),
 }
 
@@ -165,6 +169,66 @@ impl SyntaxError {
 
     pub fn too_many_arguments(span: Span) -> BolloxError {
         Self::TooManyArguments { span: span.into() }.into()
+    }
+}
+
+#[derive(Clone, Debug, Error, Diagnostic)]
+pub enum ResolverError {
+    #[error("Variable is declared, but not yet defined: `{}`.", name)]
+    UndefinedVariable {
+        name: String,
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("Variable already defined in this scope: `{}`", name)]
+    RedefinedVariable {
+        name: String,
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("Function already defined in this scope: `{}`", name)]
+    RedefinedFunction {
+        name: String,
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("Can't return from top-level code")]
+    TopLevelReturn {
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+}
+
+impl ResolverError {
+    pub fn undefined_variable(name: impl Into<String>, span: Span) -> BolloxError {
+        Self::UndefinedVariable {
+            name: name.into(),
+            span: span.into(),
+        }
+        .into()
+    }
+
+    pub fn redefined_variable(name: impl Into<String>, span: Span) -> BolloxError {
+        Self::RedefinedVariable {
+            name: name.into(),
+            span: span.into(),
+        }
+        .into()
+    }
+
+    pub fn redefined_function(name: impl Into<String>, span: Span) -> BolloxError {
+        Self::RedefinedFunction {
+            name: name.into(),
+            span: span.into(),
+        }
+        .into()
+    }
+
+    pub fn top_level_return(span: Span) -> BolloxError {
+        Self::TopLevelReturn { span: span.into() }.into()
     }
 }
 

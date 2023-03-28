@@ -7,14 +7,16 @@ mod expr;
 mod interp;
 mod node;
 mod parser;
+mod resolver;
 mod scanner;
 mod stmt;
 mod util;
 mod value;
 
+use crate::interp::{interpreter, InterpreterContext};
 use crate::parser::parser;
+use crate::resolver::resolver;
 use error::{BolloxError, BolloxErrors};
-use interp::interpreter;
 use std::cell::Cell;
 
 pub use scanner::Source;
@@ -52,8 +54,24 @@ where
         }
     });
 
+    // resolver (statements -> statements)
+    let interpreter_context = InterpreterContext::default();
+    let mut resolver = resolver(statements, interpreter_context);
+    let statements = resolver
+        .by_ref()
+        .filter_map(|stmt| match stmt {
+            Ok(e) => Some(e),
+            Err(e) => {
+                store_err(e);
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let interpreter_context = resolver.interpreter_context();
+
     // evaluate (statements)
-    interpreter(statements).for_each(|res| {
+    interpreter(statements, interpreter_context).for_each(|res| {
         if let Err(e) = res {
             store_err(e)
         }

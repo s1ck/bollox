@@ -319,7 +319,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         let span = start.union(end);
         let lambda = Expr::lambda(params, body, span.clone().into()).at(span);
 
-        return Ok(lambda);
+        Ok(lambda)
     }
     // assignment -> IDENTIFIER "=" assignment | logic_or ;
     fn assignment(&mut self) -> Result<ExprNode<'a>> {
