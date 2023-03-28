@@ -184,11 +184,12 @@ impl ResolverOps {
 
 pub(crate) struct ResolverContext<'a> {
     interpreter: InterpreterContext<'a>,
-    // A scope maps variables to their state, where
-    // `false` indicates that the variable exists,
-    // but is not yet initialized.
+    // A scope maps variables within that scope to their state.
+    // Variables are first declared and then defined. Those two
+    // states are not necessarily entered in the same statement.
     scopes: Vec<HashMap<&'a str, VarState>>,
-    // Function call depth
+    // Tracks the depth of function call nesting. This is used
+    // to figure out if the program returns from the global scope.
     depth: usize,
 }
 
