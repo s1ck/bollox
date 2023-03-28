@@ -198,18 +198,12 @@ impl InterpreterOps {
         expr: &ExprNode<'a>,
         name: &'a str,
     ) -> Result<Value<'a>> {
-        // resolve variable using local scope info from the Resolver
-        let value = match context.locals.get(&expr.span) {
-            Some(distance) => match context.environment.borrow().get_at(name, *distance) {
-                Some(value) => value,
-                None => return Err(SyntaxError::undefined_variable(name, expr.span)),
-            },
-            None => match context.environment.borrow().get_global(name) {
-                Some(value) => value,
-                None => return Err(SyntaxError::undefined_variable(name, expr.span)),
-            },
-        };
-        Ok(value)
+        context
+            .locals
+            .get(&expr.span)
+            .and_then(|distance| context.environment.borrow().get_at(name, *distance))
+            .or_else(|| context.environment.borrow().get_global(name))
+            .ok_or(SyntaxError::undefined_variable(name, expr.span))
     }
 
     fn assign_var<'a>(
@@ -218,27 +212,22 @@ impl InterpreterOps {
         name: &'a str,
     ) -> Result<Value<'a>> {
         let value = Self::eval_expr(context, expr)?;
-
-        match context.locals.get(&expr.span) {
-            Some(distance) => {
-                match context
+        context
+            .locals
+            .get(&expr.span)
+            .and_then(|distance| {
+                context
                     .environment
                     .borrow_mut()
                     .assign_at(name, value.clone(), *distance)
-                {
-                    Some(_) => Ok(value),
-                    None => Err(SyntaxError::undefined_variable(name, expr.span)),
-                }
-            }
-            None => match context
-                .environment
-                .borrow_mut()
-                .assign_global(name, value.clone())
-            {
-                Some(_) => Ok(value),
-                None => Err(SyntaxError::undefined_variable(name, expr.span)),
-            },
-        }
+            })
+            .or_else(|| {
+                context
+                    .environment
+                    .borrow_mut()
+                    .assign_global(name, value.clone())
+            })
+            .ok_or(SyntaxError::undefined_variable(name, expr.span))
     }
 }
 
