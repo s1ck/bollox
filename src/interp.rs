@@ -124,6 +124,10 @@ impl InterpreterOps {
                 }
                 None => Err(InterpreterError::Return(Value::Nil)),
             },
+            Stmt::Class(declaration) => {
+                dbg!(declaration);
+                todo!()
+            }
         }
     }
 

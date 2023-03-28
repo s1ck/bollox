@@ -4,7 +4,7 @@ use crate::{
     error::{BolloxError, SyntaxError},
     expr::{BinaryOp, Expr, ExprNode, Literal, LogicalOp, UnaryOp},
     node::Node,
-    stmt::{Stmt, StmtNode},
+    stmt::{ClassDeclaration, FunctionDeclaration, Stmt, StmtNode},
     token::{Span, Token, TokenType},
     Result, Source,
 };
@@ -59,7 +59,7 @@ macro_rules! check {
 }
 
 // Checks if the given pattern is next in the token stream
-// and consumes it it matches.
+// and consumes if it matches.
 macro_rules! check_consume {
     ($this:ident, { $($pat:pat => $expr:expr),+ $(,)? }) => {
         match $this.tokens.peek() {
@@ -105,11 +105,12 @@ pub struct Parser<'a, I: Iterator<Item = Tok>> {
 
 impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
     // program     -> declaration* EOF ;
-    // declaration -> fun_decl | var_decl | statement ;
+    // declaration -> class_decl | fun_decl | var_decl | statement ;
     fn declaration(&mut self) -> Result<StmtNode<'a>> {
         let res = check_consume!(self, {
-            (Var, span) => self.var_decl(span),
+            (Class, span) => self.class(span),
             (Fun, span) => self.function(span),
+            (Var, span) => self.var_decl(span),
         })
         .transpose()?;
 
@@ -124,16 +125,53 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
             },
         }
     }
-    // fun_decl -> "fun" function ;
-    // function -> IDENTIFIER "(" parameters? ")" block ;
+    // class -> "class" class_declaration ;
+    fn class(&mut self, class_span: Span) -> Result<StmtNode<'a>> {
+        let class_decl = self.class_decl(class_span)?;
+        let span = class_span.union(class_decl.span);
+        Ok(Stmt::class(class_decl.item).at(span))
+    }
+    // class_decl -> IDENTIFIER "{" function* "}" ;
+    fn class_decl(&mut self, class_span: Span) -> Result<Node<ClassDeclaration<'a>>> {
+        let ident = self.identifier(class_span)?;
+        let _ = self.expect(LeftBrace)?;
+        let mut methods = Vec::new();
+        let end = loop {
+            match self.tokens.peek() {
+                Some(&(RightBrace, span)) => {
+                    let _ = self.tokens.next();
+                    break span;
+                }
+                Some(&(Eof, span)) => {
+                    return Err(SyntaxError::unexpected_token(RightBrace, Eof, span))
+                }
+                None => return Err(SyntaxError::unexpected_eoi()),
+                Some(&(_, span)) => methods.push(self.function_decl(span)?),
+            }
+        };
+
+        let span = class_span.union(end);
+
+        Ok(Node::new(ClassDeclaration::new(ident, methods), span))
+    }
+    // function -> "fun" function_declaration ;
     fn function(&mut self, fun_span: Span) -> Result<StmtNode<'a>> {
+        let func_decl = self.function_decl(fun_span)?;
+        let span = fun_span.union(func_decl.span);
+        Ok(Stmt::func(func_decl.item).at(span))
+    }
+    // function_decl -> IDENTIFIER "(" parameters? ")" block ;
+    fn function_decl(&mut self, fun_span: Span) -> Result<Node<FunctionDeclaration<'a>>> {
         let ident = self.identifier(fun_span)?;
         let (parameters, _) = self.function_params()?;
         let (block, span) = self.scoped_declarations()?;
 
         let span = ident.span.union(span);
 
-        Ok(Stmt::func(ident, parameters, block).at(span))
+        Ok(Node::new(
+            FunctionDeclaration::new(ident, parameters, block),
+            span,
+        ))
     }
     // function_params -> "(" parameters? ")" ;
     fn function_params(&mut self) -> Result<(Vec<Node<&'a str>>, Span)> {

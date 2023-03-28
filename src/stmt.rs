@@ -11,6 +11,7 @@ pub enum Stmt<'a> {
     Print(ExprNode<'a>),
     Var(Node<&'a str>, Option<ExprNode<'a>>),
     Func(FunctionDeclaration<'a>),
+    Class(ClassDeclaration<'a>),
     If(ExprNode<'a>, StmtNode<'a>, Option<StmtNode<'a>>),
     While(ExprNode<'a>, StmtNode<'a>),
     Return(Option<ExprNode<'a>>),
@@ -57,12 +58,12 @@ impl<'a> Stmt<'a> {
         Self::While(condition, stmt)
     }
 
-    pub fn func(name: Node<&'a str>, params: Vec<Node<&'a str>>, body: Vec<StmtNode<'a>>) -> Self {
-        Self::Func(FunctionDeclaration {
-            name,
-            params: params.into(),
-            body: body.into(),
-        })
+    pub fn func(func_decl: FunctionDeclaration<'a>) -> Self {
+        Self::Func(func_decl)
+    }
+
+    pub fn class(class_decl: ClassDeclaration<'a>) -> Self {
+        Self::Class(class_decl)
     }
 
     pub fn return_(value: Option<ExprNode<'a>>) -> Self {
@@ -71,8 +72,37 @@ impl<'a> Stmt<'a> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct ClassDeclaration<'a> {
+    pub(crate) name: Node<&'a str>,
+    pub(crate) methods: Rc<[Node<FunctionDeclaration<'a>>]>,
+}
+
+impl<'a> ClassDeclaration<'a> {
+    pub(crate) fn new(name: Node<&'a str>, methods: Vec<Node<FunctionDeclaration<'a>>>) -> Self {
+        Self {
+            name,
+            methods: methods.into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct FunctionDeclaration<'a> {
     pub(crate) name: Node<&'a str>,
     pub(crate) params: Rc<[Node<&'a str>]>,
     pub(crate) body: Rc<[StmtNode<'a>]>,
+}
+
+impl<'a> FunctionDeclaration<'a> {
+    pub(crate) fn new(
+        name: Node<&'a str>,
+        params: Vec<Node<&'a str>>,
+        body: Vec<StmtNode<'a>>,
+    ) -> Self {
+        Self {
+            name,
+            params: params.into(),
+            body: body.into(),
+        }
+    }
 }

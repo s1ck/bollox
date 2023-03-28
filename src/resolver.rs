@@ -87,6 +87,10 @@ impl ResolverOps {
                 }
                 Ok(())
             }
+            Stmt::Class(declaration) => {
+                dbg!(declaration);
+                todo!()
+            }
         }
     }
 
