@@ -88,8 +88,9 @@ impl ResolverOps {
                 Ok(())
             }
             Stmt::Class(declaration) => {
-                dbg!(declaration);
-                todo!()
+                context.declare(declaration.name.item);
+                context.define(declaration.name.item);
+                Ok(())
             }
         }
     }
