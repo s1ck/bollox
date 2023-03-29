@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -27,6 +28,7 @@ pub(crate) trait Callable<'a> {
 pub(crate) enum Callables<'a> {
     Fn(Rc<Function<'a>>),
     Builtin(Rc<Builtins>),
+    Clazz(Rc<Class<'a>>),
 }
 
 impl<'a> Callable<'a> for Callables<'a> {
@@ -34,6 +36,7 @@ impl<'a> Callable<'a> for Callables<'a> {
         match self {
             Callables::Fn(f) => f.name(),
             Callables::Builtin(b) => b.name(),
+            Callables::Clazz(c) => c.name(),
         }
     }
 
@@ -46,6 +49,7 @@ impl<'a> Callable<'a> for Callables<'a> {
         match self {
             Callables::Fn(f) => f.call(context, args, span),
             Callables::Builtin(b) => b.call(context, args, span),
+            Callables::Clazz(c) => c.call(context, args, span),
         }
     }
 
@@ -53,6 +57,7 @@ impl<'a> Callable<'a> for Callables<'a> {
         match self {
             Callables::Fn(f) => f.arity(),
             Callables::Builtin(b) => b.arity(),
+            Callables::Clazz(c) => c.arity(),
         }
     }
 }
@@ -135,9 +140,50 @@ impl<'a> Class<'a> {
     }
 }
 
+impl<'a> Callable<'a> for Class<'a> {
+    fn name(&self) -> &str {
+        self.name
+    }
+
+    fn call(
+        &self,
+        _context: &mut InterpreterContext<'a>,
+        _args: &[Value<'a>],
+        _span: Span,
+    ) -> Result<Value<'a>> {
+        let instance = Instance::new(self.name);
+        Ok(Value::Instance(Rc::new(instance)))
+    }
+
+    fn arity(&self) -> usize {
+        0
+    }
+}
+
 impl<'a> Display for Class<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<clazz {}>", self.name)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Instance<'a> {
+    clazz: &'a str,
+    fields: HashMap<&'a str, Value<'a>>,
+}
+
+impl<'a> Instance<'a> {
+    fn new(clazz: &'a str) -> Self {
+        Self {
+            clazz,
+            fields: HashMap::new(),
+        }
+    }
+}
+
+impl<'a> Display for Instance<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<instance {}>", self.clazz)
     }
 }
 

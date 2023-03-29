@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::{cmp::Ordering, rc::Rc};
 
-use crate::callable::{Builtins, Callables, Class};
+use crate::callable::{Builtins, Callables, Class, Instance};
 use crate::{
     callable::Function,
     error::RuntimeError,
@@ -20,6 +20,7 @@ pub enum Value<'a> {
     Fn(Rc<Function<'a>>),
     Clazz(Rc<Class<'a>>),
     Builtin(Rc<Builtins>),
+    Instance(Rc<Instance<'a>>),
 }
 
 impl<'a> From<Literal<'_>> for Value<'a> {
@@ -43,6 +44,7 @@ impl<'a> Display for Value<'a> {
             Value::Str(s) => s.fmt(f),
             Value::Fn(fun) => fun.fmt(f),
             Value::Clazz(class) => class.fmt(f),
+            Value::Instance(instance) => instance.fmt(f),
             Value::Builtin(b) => b.fmt(f),
         }
     }
@@ -166,6 +168,7 @@ impl<'a> Value<'a> {
         let callable = match self {
             Value::Fn(f) => Callables::Fn(Rc::clone(f)),
             Value::Builtin(b) => Callables::Builtin(Rc::clone(b)),
+            Value::Clazz(c) => Callables::Clazz(Rc::clone(c)),
             v => return Err(RuntimeError::non_callable(v, span)),
         };
         Ok(callable)
