@@ -18,7 +18,7 @@ pub enum Value<'a> {
     Number(f64),
     Str(Rc<str>),
     Fn(Rc<Function<'a>>),
-    Clazz(Rc<Class<'a>>),
+    Clazz(&'a Class<'a>),
     Builtin(Rc<Builtins>),
     Instance(Rc<Instance<'a>>),
 }
@@ -168,7 +168,7 @@ impl<'a> Value<'a> {
         let callable = match self {
             Value::Fn(f) => Callables::Fn(Rc::clone(f)),
             Value::Builtin(b) => Callables::Builtin(Rc::clone(b)),
-            Value::Clazz(c) => Callables::Clazz(Rc::clone(c)),
+            Value::Clazz(c) => Callables::Clazz(c),
             v => return Err(RuntimeError::non_callable(v, span)),
         };
         Ok(callable)
@@ -209,8 +209,8 @@ impl<'a> From<Function<'a>> for Value<'a> {
     }
 }
 
-impl<'a> From<Class<'a>> for Value<'a> {
-    fn from(c: Class<'a>) -> Self {
-        Value::Clazz(Rc::from(c))
+impl<'a> From<&'a mut Class<'a>> for Value<'a> {
+    fn from(c: &'a mut Class<'a>) -> Self {
+        Value::Clazz(c)
     }
 }

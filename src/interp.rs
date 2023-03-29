@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    callable::{Callable, Class, Function},
+    callable::{Class, Function},
     env::{Environment, EnvironmentRef},
     error::{BolloxError, RuntimeError, SyntaxError},
     expr::{BinaryOp, Expr, ExprNode, LogicalOp, UnaryOp},
@@ -126,6 +126,8 @@ impl InterpreterOps {
             },
             Stmt::Class(declaration) => {
                 let class = Class::new(declaration, context.environment.clone());
+                let class = Box::new(class);
+                let class = Box::leak(class);
                 context
                     .environment
                     .borrow_mut()

@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    callable::{Builtins, Callable, Clock},
+    callable::{Builtins, Clock},
     value::Value,
 };
 

@@ -11,36 +11,15 @@ use crate::token::Span;
 use crate::value::Value;
 use crate::Result;
 
-pub(crate) trait Callable<'a> {
-    fn name(&self) -> &str;
-
-    fn call(
-        &self,
-        context: &mut InterpreterContext<'a>,
-        args: &[Value<'a>],
-        span: Span,
-    ) -> Result<Value<'a>>;
-
-    fn arity(&self) -> usize;
-}
-
 #[derive(Clone, Debug)]
 pub(crate) enum Callables<'a> {
     Fn(Rc<Function<'a>>),
     Builtin(Rc<Builtins>),
-    Clazz(Rc<Class<'a>>),
+    Clazz(&'a Class<'a>),
 }
 
-impl<'a> Callable<'a> for Callables<'a> {
-    fn name(&self) -> &str {
-        match self {
-            Callables::Fn(f) => f.name(),
-            Callables::Builtin(b) => b.name(),
-            Callables::Clazz(c) => c.name(),
-        }
-    }
-
-    fn call(
+impl<'a> Callables<'a> {
+    pub(crate) fn call(
         &self,
         context: &mut InterpreterContext<'a>,
         args: &[Value<'a>],
@@ -53,7 +32,7 @@ impl<'a> Callable<'a> for Callables<'a> {
         }
     }
 
-    fn arity(&self) -> usize {
+    pub(crate) fn arity(&self) -> usize {
         match self {
             Callables::Fn(f) => f.arity(),
             Callables::Builtin(b) => b.arity(),
@@ -81,11 +60,7 @@ impl<'a> Function<'a> {
     }
 }
 
-impl<'a> Callable<'a> for Function<'a> {
-    fn name(&self) -> &str {
-        self.name
-    }
-
+impl<'a> Function<'a> {
     fn call(
         &self,
         context: &mut InterpreterContext<'a>,
@@ -140,18 +115,14 @@ impl<'a> Class<'a> {
     }
 }
 
-impl<'a> Callable<'a> for Class<'a> {
-    fn name(&self) -> &str {
-        self.name
-    }
-
+impl<'a> Class<'a> {
     fn call(
-        &self,
+        &'a self,
         _context: &mut InterpreterContext<'a>,
         _args: &[Value<'a>],
         _span: Span,
     ) -> Result<Value<'a>> {
-        let instance = Instance::new(self.name);
+        let instance = Instance::new(self);
         Ok(Value::Instance(Rc::new(instance)))
     }
 
@@ -168,12 +139,12 @@ impl<'a> Display for Class<'a> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Instance<'a> {
-    clazz: &'a str,
+    clazz: &'a Class<'a>,
     fields: HashMap<&'a str, Value<'a>>,
 }
 
 impl<'a> Instance<'a> {
-    fn new(clazz: &'a str) -> Self {
+    fn new(clazz: &'a Class<'a>) -> Self {
         Self {
             clazz,
             fields: HashMap::new(),
@@ -192,13 +163,7 @@ pub enum Builtins {
     Clock(Clock),
 }
 
-impl<'a> Callable<'a> for Builtins {
-    fn name(&self) -> &str {
-        match self {
-            Builtins::Clock(c) => c.name(),
-        }
-    }
-
+impl<'a> Builtins {
     fn call(
         &self,
         context: &mut InterpreterContext<'a>,
@@ -230,8 +195,8 @@ impl Display for Builtins {
 #[derive(Copy, Clone, PartialEq)]
 pub struct Clock;
 
-impl<'a> Callable<'a> for Clock {
-    fn name(&self) -> &str {
+impl<'a> Clock {
+    pub(crate) fn name(&self) -> &str {
         "clock"
     }
 
