@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::env::{Environment, EnvironmentRef};
 use crate::interp::{InterpreterContext, InterpreterError, InterpreterOps};
 use crate::node::Node;
-use crate::stmt::{FunctionDeclaration, StmtNode};
+use crate::stmt::{ClassDeclaration, FunctionDeclaration, StmtNode};
 use crate::token::Span;
 use crate::value::Value;
 use crate::Result;
@@ -117,6 +117,27 @@ impl<'a> Callable<'a> for Function<'a> {
 impl<'a> Display for Function<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<fn {}>", self.name)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Class<'a> {
+    name: &'a str,
+    closure: EnvironmentRef<'a>,
+}
+
+impl<'a> Class<'a> {
+    pub(crate) fn new(declaration: &ClassDeclaration<'a>, closure: EnvironmentRef<'a>) -> Self {
+        Self {
+            name: declaration.name.item,
+            closure,
+        }
+    }
+}
+
+impl<'a> Display for Class<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<clazz {}>", self.name)
     }
 }
 
