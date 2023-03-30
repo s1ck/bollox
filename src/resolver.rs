@@ -64,7 +64,9 @@ impl ResolverOps {
             Stmt::Expression(expr) => Self::resolve_expr(context, expr),
             Stmt::Print(expr) => Self::resolve_expr(context, expr),
             Stmt::Var(name, initializer) => Self::resolve_variable(context, name, initializer),
-            Stmt::Func(declaration) => Self::resolve_function(context, declaration),
+            Stmt::Func(declaration) => {
+                Self::resolve_function(context, declaration, FunctionType::Function)
+            }
             Stmt::If(condition, then_branch, else_branch) => {
                 Self::resolve_expr(context, condition)?;
                 Self::resolve_stmt(context, then_branch)?;
@@ -79,7 +81,7 @@ impl ResolverOps {
                 Ok(())
             }
             Stmt::Return(value) => {
-                if context.depth == 0 {
+                if context.call_depth() == 0 {
                     return Err(ResolverError::top_level_return(stmt.span));
                 }
                 if let Some(value) = value {
@@ -90,6 +92,7 @@ impl ResolverOps {
             Stmt::Class(declaration) => {
                 context.declare(declaration.name.item);
                 context.define(declaration.name.item);
+
                 Ok(())
             }
         }
@@ -141,7 +144,9 @@ impl ResolverOps {
                 context.resolve_local(expr, name);
                 Ok(())
             }
-            Expr::Lambda { declaration } => Self::resolve_function(context, declaration),
+            Expr::Lambda { declaration } => {
+                Self::resolve_function(context, declaration, FunctionType::Lambda)
+            }
         }
     }
 
@@ -176,8 +181,9 @@ impl ResolverOps {
     fn resolve_function<'a>(
         context: &mut ResolverContext<'a>,
         declaration: &FunctionDeclaration<'a>,
+        function_type: FunctionType,
     ) -> Result<()> {
-        context.begin_function();
+        context.begin_function(function_type);
         // resolve function name first, to allow for recursive calls
         if context.declare(declaration.name.item).is_some() {
             return Err(ResolverError::redefined_function(
@@ -206,9 +212,8 @@ pub(crate) struct ResolverContext<'a> {
     // Variables are first declared and then defined. Those two
     // states are not necessarily entered in the same statement.
     scopes: Vec<HashMap<&'a str, VarState>>,
-    // Tracks the depth of function call nesting. This is used
-    // to figure out if the program returns from the global scope.
-    depth: usize,
+    // Tracks the call stack and in what kind of call we are in.
+    call_stack: Vec<FunctionType>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -217,12 +222,18 @@ enum VarState {
     Defined,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum FunctionType {
+    Function,
+    Lambda,
+}
+
 impl<'a> ResolverContext<'a> {
     fn new(interpreter: InterpreterContext<'a>) -> Self {
         Self {
             interpreter,
             scopes: Vec::new(),
-            depth: 0,
+            call_stack: Vec::new(),
         }
     }
 
@@ -271,11 +282,15 @@ impl<'a> ResolverContext<'a> {
         };
     }
 
-    fn begin_function(&mut self) {
-        self.depth += 1;
+    fn call_depth(&self) -> usize {
+        self.call_stack.len()
+    }
+
+    fn begin_function(&mut self, function_type: FunctionType) {
+        self.call_stack.push(function_type);
     }
 
     fn end_function(&mut self) {
-        self.depth -= 1;
+        self.call_stack.pop();
     }
 }
