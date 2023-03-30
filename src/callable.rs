@@ -150,6 +150,10 @@ impl<'a> Instance<'a> {
             fields: HashMap::new(),
         }
     }
+
+    pub(crate) fn get(&self, name: &'a str) -> Option<Value<'a>> {
+        self.fields.get(name).cloned()
+    }
 }
 
 impl<'a> Display for Instance<'a> {

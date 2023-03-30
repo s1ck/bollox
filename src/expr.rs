@@ -23,6 +23,10 @@ pub enum Expr<'a> {
         callee: ExprNode<'a>,
         args: Rc<[ExprNode<'a>]>,
     },
+    Get {
+        object: ExprNode<'a>,
+        name: Node<&'a str>,
+    },
     Logical {
         lhs: ExprNode<'a>,
         op: LogicalOp,
@@ -77,6 +81,10 @@ impl<'a> Expr<'a> {
 
     pub fn call(callee: ExprNode<'a>, args: Rc<[ExprNode<'a>]>) -> Self {
         Self::Call { callee, args }
+    }
+
+    pub fn get(object: ExprNode<'a>, name: Node<&'a str>) -> Self {
+        Self::Get { object, name }
     }
 
     pub fn literal(lit: Literal<'a>) -> Self {

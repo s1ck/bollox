@@ -109,6 +109,10 @@ impl ResolverOps {
                     .try_for_each(|arg| Self::resolve_expr(context, arg))?;
                 Ok(())
             }
+            Expr::Get { object, name: _ } => {
+                Self::resolve_expr(context, object)?;
+                Ok(())
+            }
             Expr::Logical { lhs, op: _, rhs } => {
                 Self::resolve_expr(context, lhs)?;
                 Self::resolve_expr(context, rhs)?;

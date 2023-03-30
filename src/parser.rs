@@ -431,7 +431,7 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         let range = span.union(inner.span);
         Ok(Expr::unary(op, inner).at(range))
     }
-    // call -> primary ( "(" arguments? ")" )* ;
+    // call -> primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
     fn call(&mut self) -> Result<ExprNode<'a>> {
         let mut expr = self.primary()?;
 
@@ -441,6 +441,11 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
                     let (args, closing) = self.arguments(span, |parser, _| parser.expression())?;
                     let span = expr.span.union(closing);
                     expr = Expr::call(expr, args.into()).at(span);
+                },
+                (Dot, span) => {
+                    let name = self.identifier(span)?;
+                    let span = expr.span.union(name.span);
+                    expr = Expr::get(expr, name).at(span);
                 }
             });
 

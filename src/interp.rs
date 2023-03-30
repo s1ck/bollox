@@ -194,6 +194,13 @@ impl InterpreterOps {
 
                 callable.call(context, &args, span)?
             }
+            Expr::Get { object, name } => match Self::eval_expr(context, object)? {
+                Value::Instance(instance) => match instance.get(name.item) {
+                    Some(value) => value,
+                    None => return Err(RuntimeError::undefined_property(name.item, name.span)),
+                },
+                _ => return Err(RuntimeError::invalid_property_call(name.span)),
+            },
             Expr::Lambda { declaration } => {
                 Function::new(declaration, context.environment.clone()).into()
             }

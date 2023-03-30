@@ -271,6 +271,19 @@ pub enum RuntimeError {
         #[label("{}", self)]
         span: SourceSpan,
     },
+
+    #[error("Properties are only available on instances.")]
+    InvalidPropertyCall {
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("Undefined property, got `{}`.", name)]
+    UndefinedProperty {
+        name: String,
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
 }
 
 impl RuntimeError {
@@ -317,6 +330,18 @@ impl RuntimeError {
             lhs: lhs.to_string(),
             rhs: rhs.to_string(),
             op,
+            span: span.into(),
+        }
+        .into()
+    }
+
+    pub fn invalid_property_call(span: Span) -> BolloxError {
+        Self::InvalidPropertyCall { span: span.into() }.into()
+    }
+
+    pub fn undefined_property(name: impl Display, span: Span) -> BolloxError {
+        Self::UndefinedProperty {
+            name: name.to_string(),
             span: span.into(),
         }
         .into()
