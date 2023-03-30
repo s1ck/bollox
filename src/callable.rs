@@ -7,7 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::env::{Environment, EnvironmentRef};
 use crate::interp::{InterpreterContext, InterpreterError, InterpreterOps};
 use crate::node::Node;
-use crate::stmt::{ClassDeclaration, FunctionDeclaration, StmtNode};
+use crate::stmt::{FunctionDeclaration, StmtNode};
 use crate::token::Span;
 use crate::value::Value;
 use crate::Result;
@@ -104,15 +104,25 @@ impl<'a> Display for Function<'a> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Class<'a> {
     name: &'a str,
+    methods: HashMap<&'a str, Function<'a>>,
     closure: EnvironmentRef<'a>,
 }
 
 impl<'a> Class<'a> {
-    pub(crate) fn new(declaration: &ClassDeclaration<'a>, closure: EnvironmentRef<'a>) -> Self {
+    pub(crate) fn new(
+        name: &'a str,
+        methods: HashMap<&'a str, Function<'a>>,
+        closure: EnvironmentRef<'a>,
+    ) -> Self {
         Self {
-            name: declaration.name.item,
+            name,
+            methods,
             closure,
         }
+    }
+
+    pub(crate) fn get_method(&self, name: &'a str) -> Option<Function<'a>> {
+        self.methods.get(name).cloned()
     }
 }
 
@@ -153,7 +163,10 @@ impl<'a> Instance<'a> {
     }
 
     pub(crate) fn get(&self, name: &'a str) -> Option<Value<'a>> {
-        self.fields.borrow().get(name).cloned()
+        match self.fields.borrow().get(name) {
+            Some(field) => Some(field.clone()),
+            None => self.clazz.get_method(name).map(|method| method.into()),
+        }
     }
 
     pub(crate) fn set(&self, name: &'a str, value: Value<'a>) {

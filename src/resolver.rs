@@ -93,6 +93,10 @@ impl ResolverOps {
                 context.declare(declaration.name.item);
                 context.define(declaration.name.item);
 
+                declaration.methods.iter().try_for_each(|method| {
+                    Self::resolve_function(context, &method.item, FunctionType::Method)
+                })?;
+
                 Ok(())
             }
         }
@@ -226,6 +230,7 @@ enum VarState {
 enum FunctionType {
     Function,
     Lambda,
+    Method,
 }
 
 impl<'a> ResolverContext<'a> {

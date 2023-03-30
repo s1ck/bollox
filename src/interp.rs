@@ -125,7 +125,19 @@ impl InterpreterOps {
                 None => Err(InterpreterError::Return(Value::Nil)),
             },
             Stmt::Class(declaration) => {
-                let class = Class::new(declaration, context.environment.clone());
+                let name = declaration.name.item;
+                let methods = declaration
+                    .methods
+                    .iter()
+                    .map(|declaration| {
+                        (
+                            declaration.item.name.item,
+                            Function::new(&declaration.item, context.environment.clone()),
+                        )
+                    })
+                    .collect::<HashMap<_, _>>();
+
+                let class = Class::new(name, methods, context.environment.clone());
                 let class = Box::new(class);
                 let class = Box::leak(class);
                 context
