@@ -201,6 +201,18 @@ impl InterpreterOps {
                 },
                 _ => return Err(RuntimeError::invalid_property_call(name.span)),
             },
+            Expr::Set {
+                object,
+                name,
+                value,
+            } => match Self::eval_expr(context, object)? {
+                Value::Instance(instance) => {
+                    let value = Self::eval_expr(context, value)?;
+                    instance.set(name.item, value.clone());
+                    value
+                }
+                _ => return Err(RuntimeError::invalid_property_call(name.span)),
+            },
             Expr::Lambda { declaration } => {
                 Function::new(declaration, context.environment.clone()).into()
             }

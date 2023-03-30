@@ -27,6 +27,11 @@ pub enum Expr<'a> {
         object: ExprNode<'a>,
         name: Node<&'a str>,
     },
+    Set {
+        object: ExprNode<'a>,
+        name: Node<&'a str>,
+        value: ExprNode<'a>,
+    },
     Logical {
         lhs: ExprNode<'a>,
         op: LogicalOp,
@@ -85,6 +90,14 @@ impl<'a> Expr<'a> {
 
     pub fn get(object: ExprNode<'a>, name: Node<&'a str>) -> Self {
         Self::Get { object, name }
+    }
+
+    pub fn set(object: ExprNode<'a>, name: Node<&'a str>, value: ExprNode<'a>) -> Self {
+        Self::Set {
+            object,
+            name,
+            value,
+        }
     }
 
     pub fn literal(lit: Literal<'a>) -> Self {

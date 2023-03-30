@@ -113,6 +113,15 @@ impl ResolverOps {
                 Self::resolve_expr(context, object)?;
                 Ok(())
             }
+            Expr::Set {
+                object,
+                name: _,
+                value,
+            } => {
+                Self::resolve_expr(context, value)?;
+                Self::resolve_expr(context, object)?;
+                Ok(())
+            }
             Expr::Logical { lhs, op: _, rhs } => {
                 Self::resolve_expr(context, lhs)?;
                 Self::resolve_expr(context, rhs)?;

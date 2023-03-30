@@ -359,16 +359,20 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
 
         Ok(lambda)
     }
-    // assignment -> IDENTIFIER "=" assignment | logic_or ;
+    // assignment -> (call ".")? IDENTIFIER "=" assignment | logic_or ;
     fn assignment(&mut self) -> Result<ExprNode<'a>> {
         let lhs = self.logic_or()?;
 
         if check_consume!(self, Equal) {
-            let assignment = self.assignment()?;
+            let value = self.assignment()?;
             return match *lhs.item {
                 Expr::Variable { name } => {
-                    let range = lhs.span.union(assignment.span);
-                    Ok(Expr::assign(name, assignment).at(range))
+                    let span = lhs.span.union(value.span);
+                    Ok(Expr::assign(name, value).at(span))
+                }
+                Expr::Get { object, name } => {
+                    let span = lhs.span.union(value.span);
+                    Ok(Expr::set(object, name, value).at(span))
                 }
                 _ => Err(SyntaxError::invalid_assignment_target(lhs.span)),
             };

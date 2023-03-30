@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::rc::Rc;
@@ -140,19 +141,23 @@ impl<'a> Display for Class<'a> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Instance<'a> {
     clazz: &'a Class<'a>,
-    fields: HashMap<&'a str, Value<'a>>,
+    fields: RefCell<HashMap<&'a str, Value<'a>>>,
 }
 
 impl<'a> Instance<'a> {
     fn new(clazz: &'a Class<'a>) -> Self {
         Self {
             clazz,
-            fields: HashMap::new(),
+            fields: RefCell::new(HashMap::new()),
         }
     }
 
     pub(crate) fn get(&self, name: &'a str) -> Option<Value<'a>> {
-        self.fields.get(name).cloned()
+        self.fields.borrow().get(name).cloned()
+    }
+
+    pub(crate) fn set(&self, name: &'a str, value: Value<'a>) {
+        self.fields.borrow_mut().insert(name, value);
     }
 }
 
