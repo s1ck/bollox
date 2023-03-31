@@ -163,7 +163,13 @@ impl<'a> Class<'a> {
     }
 
     pub(crate) fn get_method(&self, name: &'a str) -> Option<Function<'a>> {
-        self.methods.get(name).cloned()
+        match self.methods.get(name) {
+            Some(method) => Some(method.clone()),
+            None => match self.superclass {
+                Some(superclass) => superclass.get_method(name),
+                None => None,
+            },
+        }
     }
 }
 
