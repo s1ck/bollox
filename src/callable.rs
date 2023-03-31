@@ -143,6 +143,7 @@ impl<'a> Display for Function<'a> {
 pub struct Class<'a> {
     name: &'a str,
     methods: HashMap<&'a str, Function<'a>>,
+    superclass: Option<&'a Class<'a>>,
     closure: EnvironmentRef<'a>,
 }
 
@@ -150,11 +151,13 @@ impl<'a> Class<'a> {
     pub(crate) fn new(
         name: &'a str,
         methods: HashMap<&'a str, Function<'a>>,
+        superclass: Option<&'a Class<'a>>,
         closure: EnvironmentRef<'a>,
     ) -> Self {
         Self {
             name,
             methods,
+            superclass,
             closure,
         }
     }

@@ -75,13 +75,19 @@ impl<'a> Stmt<'a> {
 pub struct ClassDeclaration<'a> {
     pub(crate) name: Node<&'a str>,
     pub(crate) methods: Rc<[Node<FunctionDeclaration<'a>>]>,
+    pub(crate) superclass: Option<ExprNode<'a>>,
 }
 
 impl<'a> ClassDeclaration<'a> {
-    pub(crate) fn new(name: Node<&'a str>, methods: Vec<Node<FunctionDeclaration<'a>>>) -> Self {
+    pub(crate) fn new(
+        name: Node<&'a str>,
+        methods: Vec<Node<FunctionDeclaration<'a>>>,
+        superclass: Option<ExprNode<'a>>,
+    ) -> Self {
         Self {
             name,
             methods: methods.into(),
+            superclass,
         }
     }
 }
