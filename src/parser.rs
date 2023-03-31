@@ -131,9 +131,17 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         let span = class_span.union(class_decl.span);
         Ok(Stmt::class(class_decl.item).at(span))
     }
-    // class_decl -> IDENTIFIER "{" function* "}" ;
+    // class_decl -> IDENTIFIER ( "<" IDENTIFIER )? "{" function* "}" ;
     fn class_decl(&mut self, class_span: Span) -> Result<Node<ClassDeclaration<'a>>> {
         let ident = self.identifier(class_span)?;
+
+        let superclass = check_consume!(self, {
+            (Less, span) => {
+                let superclass = self.identifier(span)?;
+                Expr::variable(superclass.item).at(superclass.span)
+            },
+        });
+
         let _ = self.expect(LeftBrace)?;
         let mut methods = Vec::new();
         let end = loop {
@@ -152,7 +160,10 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
 
         let span = class_span.union(end);
 
-        Ok(Node::new(ClassDeclaration::new(ident, methods), span))
+        Ok(Node::new(
+            ClassDeclaration::new(ident, methods, superclass),
+            span,
+        ))
     }
     // function -> "fun" function_declaration ;
     fn function(&mut self, fun_span: Span) -> Result<StmtNode<'a>> {

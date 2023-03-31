@@ -212,6 +212,12 @@ pub enum ResolverError {
         #[label("{}", self)]
         span: SourceSpan,
     },
+
+    #[error("A class cannot inherit from itself.")]
+    SubclassEqualsSuperclass {
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
 }
 
 impl ResolverError {
@@ -249,6 +255,10 @@ impl ResolverError {
 
     pub fn return_in_init(span: Span) -> BolloxError {
         Self::ReturnInInit { span: span.into() }.into()
+    }
+
+    pub fn sub_eq_sup(span: Span) -> BolloxError {
+        Self::SubclassEqualsSuperclass { span: span.into() }.into()
     }
 }
 
@@ -308,6 +318,12 @@ pub enum RuntimeError {
     #[error("Internal error: `{}`.", msg)]
     InternalError {
         msg: String,
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("Superclass must be a class.")]
+    SuperclassNoClass {
         #[label("{}", self)]
         span: SourceSpan,
     },
@@ -380,5 +396,9 @@ impl RuntimeError {
             span: span.into(),
         }
         .into()
+    }
+
+    pub fn super_no_class(span: Span) -> BolloxError {
+        Self::SuperclassNoClass { span: span.into() }.into()
     }
 }

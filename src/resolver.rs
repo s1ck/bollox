@@ -55,44 +55,45 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Iterator for Resolver<'a, I> {
 pub(crate) struct ResolverOps;
 
 impl ResolverOps {
-    pub(crate) fn resolve_stmt<'a>(
+    fn resolve_block<'a>(context: &mut ResolverContext<'a>, stmts: &[StmtNode<'a>]) -> Result<()> {
+        context.begin_scope();
+        Self::resolve_stmts(context, stmts)?;
+        context.end_scope();
+        Ok(())
+    }
+
+    fn resolve_class<'a>(
         context: &mut ResolverContext<'a>,
-        stmt: &StmtNode<'a>,
+        class: &ClassDeclaration<'a>,
     ) -> Result<()> {
-        match &*stmt.item {
-            Stmt::Block(stmts) => Self::resolve_block(context, stmts),
-            Stmt::Expression(expr) => Self::resolve_expr(context, expr),
-            Stmt::Print(expr) => Self::resolve_expr(context, expr),
-            Stmt::Var(name, initializer) => Self::resolve_variable(context, name, initializer),
-            Stmt::Func(declaration) => {
-                Self::resolve_function(context, declaration, SectionType::Function)
+        context.declare(class.name.item);
+        context.define(class.name.item);
+
+        if let Some(superclass) = &class.superclass {
+            if matches!(*superclass.item, Expr::Variable { name } if name == class.name.item) {
+                return Err(ResolverError::sub_eq_sup(superclass.span));
             }
-            Stmt::If(condition, then_branch, else_branch) => {
-                Self::resolve_expr(context, condition)?;
-                Self::resolve_stmt(context, then_branch)?;
-                if let Some(else_branch) = else_branch {
-                    Self::resolve_stmt(context, else_branch)?;
-                }
-                Ok(())
-            }
-            Stmt::While(condition, statement) => {
-                Self::resolve_expr(context, condition)?;
-                Self::resolve_stmt(context, statement)?;
-                Ok(())
-            }
-            Stmt::Return(Some(value)) => {
-                if context.is_top_level() {
-                    return Err(ResolverError::top_level_return(stmt.span));
-                }
-                if context.in_section(SectionType::Initializer) {
-                    return Err(ResolverError::return_in_init(stmt.span));
-                }
-                Self::resolve_expr(context, value)?;
-                Ok(())
-            }
-            Stmt::Return(None) => Ok(()),
-            Stmt::Class(declaration) => Self::resolve_class(context, declaration),
+            Self::resolve_expr(context, superclass)?;
         }
+
+        context.begin_section(SectionType::Class);
+        context.begin_scope();
+
+        context.declare("this");
+        context.define("this");
+
+        class.methods.iter().try_for_each(|method| {
+            let section_type = match method.item.name.item {
+                "init" => SectionType::Initializer,
+                _ => SectionType::Method,
+            };
+            Self::resolve_function(context, &method.item, section_type)
+        })?;
+
+        context.end_scope();
+        context.end_section();
+
+        Ok(())
     }
 
     fn resolve_expr<'a>(context: &mut ResolverContext<'a>, expr: &ExprNode<'a>) -> Result<()> {
@@ -154,61 +155,6 @@ impl ResolverOps {
         }
     }
 
-    fn resolve_stmts<'a>(context: &mut ResolverContext<'a>, stmts: &[StmtNode<'a>]) -> Result<()> {
-        stmts
-            .iter()
-            .try_for_each(|stmt| Self::resolve_stmt(context, stmt))
-    }
-
-    fn resolve_block<'a>(context: &mut ResolverContext<'a>, stmts: &[StmtNode<'a>]) -> Result<()> {
-        context.begin_scope();
-        Self::resolve_stmts(context, stmts)?;
-        context.end_scope();
-        Ok(())
-    }
-
-    fn resolve_class<'a>(
-        context: &mut ResolverContext<'a>,
-        class: &ClassDeclaration<'a>,
-    ) -> Result<()> {
-        context.declare(class.name.item);
-        context.define(class.name.item);
-
-        context.begin_section(SectionType::Class);
-        context.begin_scope();
-
-        context.declare("this");
-        context.define("this");
-
-        class.methods.iter().try_for_each(|method| {
-            let section_type = match method.item.name.item {
-                "init" => SectionType::Initializer,
-                _ => SectionType::Method,
-            };
-            Self::resolve_function(context, &method.item, section_type)
-        })?;
-
-        context.end_scope();
-        context.end_section();
-
-        Ok(())
-    }
-
-    fn resolve_variable<'a>(
-        context: &mut ResolverContext<'a>,
-        name: &Node<&'a str>,
-        initializer: &Option<ExprNode<'a>>,
-    ) -> Result<()> {
-        if context.declare(name.item).is_some() {
-            return Err(ResolverError::redefined_variable(name.item, name.span));
-        }
-        if let Some(expr) = initializer {
-            Self::resolve_expr(context, expr)?;
-        }
-        context.define(name.item);
-        Ok(())
-    }
-
     fn resolve_function<'a>(
         context: &mut ResolverContext<'a>,
         declaration: &FunctionDeclaration<'a>,
@@ -233,6 +179,67 @@ impl ResolverOps {
         context.end_scope();
         context.end_section();
 
+        Ok(())
+    }
+
+    pub(crate) fn resolve_stmt<'a>(
+        context: &mut ResolverContext<'a>,
+        stmt: &StmtNode<'a>,
+    ) -> Result<()> {
+        match &*stmt.item {
+            Stmt::Block(stmts) => Self::resolve_block(context, stmts),
+            Stmt::Expression(expr) => Self::resolve_expr(context, expr),
+            Stmt::Print(expr) => Self::resolve_expr(context, expr),
+            Stmt::Var(name, initializer) => Self::resolve_variable(context, name, initializer),
+            Stmt::Func(declaration) => {
+                Self::resolve_function(context, declaration, SectionType::Function)
+            }
+            Stmt::If(condition, then_branch, else_branch) => {
+                Self::resolve_expr(context, condition)?;
+                Self::resolve_stmt(context, then_branch)?;
+                if let Some(else_branch) = else_branch {
+                    Self::resolve_stmt(context, else_branch)?;
+                }
+                Ok(())
+            }
+            Stmt::While(condition, statement) => {
+                Self::resolve_expr(context, condition)?;
+                Self::resolve_stmt(context, statement)?;
+                Ok(())
+            }
+            Stmt::Return(Some(value)) => {
+                if context.is_top_level() {
+                    return Err(ResolverError::top_level_return(stmt.span));
+                }
+                if context.in_section(SectionType::Initializer) {
+                    return Err(ResolverError::return_in_init(stmt.span));
+                }
+                Self::resolve_expr(context, value)?;
+                Ok(())
+            }
+            Stmt::Return(None) => Ok(()),
+            Stmt::Class(declaration) => Self::resolve_class(context, declaration),
+        }
+    }
+
+    fn resolve_stmts<'a>(context: &mut ResolverContext<'a>, stmts: &[StmtNode<'a>]) -> Result<()> {
+        stmts
+            .iter()
+            .try_for_each(|stmt| Self::resolve_stmt(context, stmt))
+    }
+
+    fn resolve_variable<'a>(
+        context: &mut ResolverContext<'a>,
+        name: &Node<&'a str>,
+        initializer: &Option<ExprNode<'a>>,
+    ) -> Result<()> {
+        if context.declare(name.item).is_some() {
+            return Err(ResolverError::redefined_variable(name.item, name.span));
+        }
+        if let Some(expr) = initializer {
+            Self::resolve_expr(context, expr)?;
+        }
+        context.define(name.item);
         Ok(())
     }
 }

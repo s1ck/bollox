@@ -125,6 +125,14 @@ impl InterpreterOps {
                 None => Err(InterpreterError::Return(Value::Nil)),
             },
             Stmt::Class(declaration) => {
+                let superclass = match &declaration.superclass {
+                    Some(superclass) => match Self::eval_expr(context, superclass)? {
+                        Value::Clazz(c) => Some(c),
+                        _ => return Err(RuntimeError::super_no_class(stmt.span).into()),
+                    },
+                    None => None,
+                };
+
                 let name = declaration.name.item;
                 let methods = declaration
                     .methods
@@ -141,7 +149,7 @@ impl InterpreterOps {
                     })
                     .collect::<HashMap<_, _>>();
 
-                let class = Class::new(name, methods, context.environment.clone());
+                let class = Class::new(name, methods, superclass, context.environment.clone());
                 let class = Box::new(class);
                 let class = Box::leak(class);
                 context
@@ -298,6 +306,12 @@ impl<'a, I: Iterator<Item = StmtNode<'a>>> Iterator for Interpreter<'a, I> {
 pub(crate) enum InterpreterError<'a> {
     Return(Value<'a>),
     Err(BolloxError),
+}
+
+impl<'a> From<RuntimeError> for InterpreterError<'a> {
+    fn from(e: RuntimeError) -> Self {
+        Self::Err(e.into())
+    }
 }
 
 impl<'a> From<Value<'a>> for InterpreterError<'a> {
