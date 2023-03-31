@@ -181,22 +181,28 @@ pub enum ResolverError {
         span: SourceSpan,
     },
 
-    #[error("Variable already defined in this scope: `{}`", name)]
+    #[error("Variable already defined in this scope: `{}`.", name)]
     RedefinedVariable {
         name: String,
         #[label("{}", self)]
         span: SourceSpan,
     },
 
-    #[error("Function already defined in this scope: `{}`", name)]
+    #[error("Function already defined in this scope: `{}`.", name)]
     RedefinedFunction {
         name: String,
         #[label("{}", self)]
         span: SourceSpan,
     },
 
-    #[error("Can't return from top-level code")]
+    #[error("Can't return from top-level code.")]
     TopLevelReturn {
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("`this` can not be called outside of class context.")]
+    ThisOutsideClass {
         #[label("{}", self)]
         span: SourceSpan,
     },
@@ -229,6 +235,10 @@ impl ResolverError {
 
     pub fn top_level_return(span: Span) -> BolloxError {
         Self::TopLevelReturn { span: span.into() }.into()
+    }
+
+    pub fn this_outside_class(span: Span) -> BolloxError {
+        Self::ThisOutsideClass { span: span.into() }.into()
     }
 }
 

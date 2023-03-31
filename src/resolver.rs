@@ -65,7 +65,7 @@ impl ResolverOps {
             Stmt::Print(expr) => Self::resolve_expr(context, expr),
             Stmt::Var(name, initializer) => Self::resolve_variable(context, name, initializer),
             Stmt::Func(declaration) => {
-                Self::resolve_function(context, declaration, FunctionType::Function)
+                Self::resolve_function(context, declaration, SectionType::Function)
             }
             Stmt::If(condition, then_branch, else_branch) => {
                 Self::resolve_expr(context, condition)?;
@@ -121,6 +121,9 @@ impl ResolverOps {
                 Ok(())
             }
             Expr::This { keyword } => {
+                if !context.in_section(SectionType::Class) {
+                    return Err(ResolverError::this_outside_class(expr.span));
+                }
                 context.resolve_local(expr, keyword.item);
                 Ok(())
             }
@@ -144,7 +147,7 @@ impl ResolverOps {
                 Ok(())
             }
             Expr::Lambda { declaration } => {
-                Self::resolve_function(context, declaration, FunctionType::Lambda)
+                Self::resolve_function(context, declaration, SectionType::Lambda)
             }
         }
     }
@@ -169,16 +172,18 @@ impl ResolverOps {
         context.declare(class.name.item);
         context.define(class.name.item);
 
+        context.begin_section(SectionType::Class);
         context.begin_scope();
 
         context.declare("this");
         context.define("this");
 
         class.methods.iter().try_for_each(|method| {
-            Self::resolve_function(context, &method.item, FunctionType::Method)
+            Self::resolve_function(context, &method.item, SectionType::Method)
         })?;
 
         context.end_scope();
+        context.end_section();
 
         Ok(())
     }
@@ -201,9 +206,9 @@ impl ResolverOps {
     fn resolve_function<'a>(
         context: &mut ResolverContext<'a>,
         declaration: &FunctionDeclaration<'a>,
-        function_type: FunctionType,
+        function_type: SectionType,
     ) -> Result<()> {
-        context.begin_function(function_type);
+        context.begin_section(function_type);
         // resolve function name first, to allow for recursive calls
         if context.declare(declaration.name.item).is_some() {
             return Err(ResolverError::redefined_function(
@@ -220,7 +225,7 @@ impl ResolverOps {
         });
         Self::resolve_stmts(context, &declaration.body)?;
         context.end_scope();
-        context.end_function();
+        context.end_section();
 
         Ok(())
     }
@@ -232,8 +237,9 @@ pub(crate) struct ResolverContext<'a> {
     // Variables are first declared and then defined. Those two
     // states are not necessarily entered in the same statement.
     scopes: Vec<HashMap<&'a str, VarState>>,
-    // Tracks the call stack and in what kind of call we are in.
-    call_stack: Vec<FunctionType>,
+    // Tracks the call stack and in what kind of section we are in.
+    // A section in Bollox is, e.g., a function, method or class.
+    sections: Vec<SectionType>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -242,11 +248,12 @@ enum VarState {
     Defined,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum FunctionType {
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum SectionType {
     Function,
     Lambda,
     Method,
+    Class,
 }
 
 impl<'a> ResolverContext<'a> {
@@ -254,7 +261,7 @@ impl<'a> ResolverContext<'a> {
         Self {
             interpreter,
             scopes: Vec::new(),
-            call_stack: Vec::new(),
+            sections: Vec::new(),
         }
     }
 
@@ -304,14 +311,18 @@ impl<'a> ResolverContext<'a> {
     }
 
     fn call_depth(&self) -> usize {
-        self.call_stack.len()
+        self.sections.len()
     }
 
-    fn begin_function(&mut self, function_type: FunctionType) {
-        self.call_stack.push(function_type);
+    fn in_section(&self, section_type: SectionType) -> bool {
+        self.sections.iter().any(|st| *st == section_type)
     }
 
-    fn end_function(&mut self) {
-        self.call_stack.pop();
+    fn begin_section(&mut self, function_type: SectionType) {
+        self.sections.push(function_type);
+    }
+
+    fn end_section(&mut self) {
+        self.sections.pop();
     }
 }
