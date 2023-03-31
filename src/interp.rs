@@ -225,6 +225,7 @@ impl InterpreterOps {
                 }
                 _ => return Err(RuntimeError::invalid_property_call(name.span)),
             },
+            Expr::This { keyword } => Self::get_var(context, expr, keyword.item)?,
             Expr::Lambda { declaration } => {
                 Function::new(declaration, context.environment.clone()).into()
             }

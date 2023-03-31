@@ -482,6 +482,11 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
                 let end = self.expect(RightParen)?;
                 (Expr::group(expr), span.union(end).into())
             }
+            Some((This, span)) => {
+                let value = self.source.slice(span);
+                let value = Node::new(value, span);
+                (Expr::this(value), span)
+            }
             Some((Identifier, span)) => {
                 let value = self.source.slice(span);
                 (Expr::variable(value), span)

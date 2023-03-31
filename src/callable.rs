@@ -59,6 +59,19 @@ impl<'a> Function<'a> {
             closure,
         }
     }
+
+    pub(crate) fn bind(&self, instance: Instance<'a>) -> Self {
+        let environment = self.closure.clone();
+        environment
+            .borrow_mut()
+            .define("this", Value::Instance(Rc::new(instance)));
+        Self {
+            name: self.name,
+            params: Rc::clone(&self.params),
+            body: Rc::clone(&self.body),
+            closure: environment,
+        }
+    }
 }
 
 impl<'a> Function<'a> {
@@ -165,7 +178,10 @@ impl<'a> Instance<'a> {
     pub(crate) fn get(&self, name: &'a str) -> Option<Value<'a>> {
         match self.fields.borrow().get(name) {
             Some(field) => Some(field.clone()),
-            None => self.clazz.get_method(name).map(|method| method.into()),
+            None => match self.clazz.get_method(name) {
+                Some(method) => Some(method.bind(self.clone()).into()),
+                None => todo!(),
+            },
         }
     }
 

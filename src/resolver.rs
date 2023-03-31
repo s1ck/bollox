@@ -5,7 +5,7 @@ use crate::{
     expr::{Expr, ExprNode},
     interp::InterpreterContext,
     node::Node,
-    stmt::{FunctionDeclaration, Stmt, StmtNode},
+    stmt::{ClassDeclaration, FunctionDeclaration, Stmt, StmtNode},
     Result,
 };
 
@@ -89,16 +89,7 @@ impl ResolverOps {
                 }
                 Ok(())
             }
-            Stmt::Class(declaration) => {
-                context.declare(declaration.name.item);
-                context.define(declaration.name.item);
-
-                declaration.methods.iter().try_for_each(|method| {
-                    Self::resolve_function(context, &method.item, FunctionType::Method)
-                })?;
-
-                Ok(())
-            }
+            Stmt::Class(declaration) => Self::resolve_class(context, declaration),
         }
     }
 
@@ -127,6 +118,10 @@ impl ResolverOps {
             } => {
                 Self::resolve_expr(context, value)?;
                 Self::resolve_expr(context, object)?;
+                Ok(())
+            }
+            Expr::This { keyword } => {
+                context.resolve_local(expr, keyword.item);
                 Ok(())
             }
             Expr::Logical { lhs, op: _, rhs } => {
@@ -164,6 +159,27 @@ impl ResolverOps {
         context.begin_scope();
         Self::resolve_stmts(context, stmts)?;
         context.end_scope();
+        Ok(())
+    }
+
+    fn resolve_class<'a>(
+        context: &mut ResolverContext<'a>,
+        class: &ClassDeclaration<'a>,
+    ) -> Result<()> {
+        context.declare(class.name.item);
+        context.define(class.name.item);
+
+        context.begin_scope();
+
+        context.declare("this");
+        context.define("this");
+
+        class.methods.iter().try_for_each(|method| {
+            Self::resolve_function(context, &method.item, FunctionType::Method)
+        })?;
+
+        context.end_scope();
+
         Ok(())
     }
 

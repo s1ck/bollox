@@ -32,6 +32,9 @@ pub enum Expr<'a> {
         name: Node<&'a str>,
         value: ExprNode<'a>,
     },
+    This {
+        keyword: Node<&'a str>,
+    },
     Logical {
         lhs: ExprNode<'a>,
         op: LogicalOp,
@@ -98,6 +101,10 @@ impl<'a> Expr<'a> {
             name,
             value,
         }
+    }
+
+    pub fn this(keyword: Node<&'a str>) -> Self {
+        Self::This { keyword }
     }
 
     pub fn literal(lit: Literal<'a>) -> Self {
