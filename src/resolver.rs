@@ -81,7 +81,7 @@ impl ResolverOps {
                 Ok(())
             }
             Stmt::Return(value) => {
-                if context.call_depth() == 0 {
+                if context.is_top_level() {
                     return Err(ResolverError::top_level_return(stmt.span));
                 }
                 if let Some(value) = value {
@@ -310,8 +310,8 @@ impl<'a> ResolverContext<'a> {
         };
     }
 
-    fn call_depth(&self) -> usize {
-        self.sections.len()
+    fn is_top_level(&self) -> bool {
+        self.sections.is_empty()
     }
 
     fn in_section(&self, section_type: SectionType) -> bool {
