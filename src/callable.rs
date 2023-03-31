@@ -60,11 +60,11 @@ impl<'a> Function<'a> {
         }
     }
 
-    pub(crate) fn bind(&self, instance: Instance<'a>) -> Self {
+    pub(crate) fn bind(&self, instance: Rc<Instance<'a>>) -> Self {
         let environment = self.closure.clone();
         environment
             .borrow_mut()
-            .define("this", Value::Instance(Rc::new(instance)));
+            .define("this", Value::Instance(instance));
         Self {
             name: self.name,
             params: Rc::clone(&self.params),
@@ -142,16 +142,24 @@ impl<'a> Class<'a> {
 impl<'a> Class<'a> {
     fn call(
         &'a self,
-        _context: &mut InterpreterContext<'a>,
-        _args: &[Value<'a>],
-        _span: Span,
+        context: &mut InterpreterContext<'a>,
+        args: &[Value<'a>],
+        span: Span,
     ) -> Result<Value<'a>> {
-        let instance = Instance::new(self);
-        Ok(Value::Instance(Rc::new(instance)))
+        let instance = Rc::new(Instance::new(self));
+        if let Some(initializer) = self.get_method("init") {
+            let _ = initializer
+                .bind(instance.clone())
+                .call(context, args, span)?;
+        }
+        Ok(instance.into())
     }
 
     fn arity(&self) -> usize {
-        0
+        match self.get_method("init") {
+            Some(method) => method.arity(),
+            None => 0,
+        }
     }
 }
 
@@ -178,10 +186,10 @@ impl<'a> Instance<'a> {
     pub(crate) fn get(&self, name: &'a str) -> Option<Value<'a>> {
         match self.fields.borrow().get(name) {
             Some(field) => Some(field.clone()),
-            None => match self.clazz.get_method(name) {
-                Some(method) => Some(method.bind(self.clone()).into()),
-                None => todo!(),
-            },
+            None => self
+                .clazz
+                .get_method(name)
+                .map(|method| method.bind(Rc::new(self.clone())).into()),
         }
     }
 

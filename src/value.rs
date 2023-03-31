@@ -214,3 +214,15 @@ impl<'a> From<&'a mut Class<'a>> for Value<'a> {
         Value::Clazz(c)
     }
 }
+
+impl<'a> From<Instance<'a>> for Value<'a> {
+    fn from(i: Instance<'a>) -> Self {
+        Value::Instance(Rc::new(i))
+    }
+}
+
+impl<'a> From<Rc<Instance<'a>>> for Value<'a> {
+    fn from(i: Rc<Instance<'a>>) -> Self {
+        Value::Instance(i)
+    }
+}
