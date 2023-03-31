@@ -80,15 +80,17 @@ impl ResolverOps {
                 Self::resolve_stmt(context, statement)?;
                 Ok(())
             }
-            Stmt::Return(value) => {
+            Stmt::Return(Some(value)) => {
                 if context.is_top_level() {
                     return Err(ResolverError::top_level_return(stmt.span));
                 }
-                if let Some(value) = value {
-                    Self::resolve_expr(context, value)?
+                if context.in_section(SectionType::Initializer) {
+                    return Err(ResolverError::return_in_init(stmt.span));
                 }
+                Self::resolve_expr(context, value)?;
                 Ok(())
             }
+            Stmt::Return(None) => Ok(()),
             Stmt::Class(declaration) => Self::resolve_class(context, declaration),
         }
     }
@@ -179,7 +181,11 @@ impl ResolverOps {
         context.define("this");
 
         class.methods.iter().try_for_each(|method| {
-            Self::resolve_function(context, &method.item, SectionType::Method)
+            let section_type = match method.item.name.item {
+                "init" => SectionType::Initializer,
+                _ => SectionType::Method,
+            };
+            Self::resolve_function(context, &method.item, section_type)
         })?;
 
         context.end_scope();
@@ -254,6 +260,7 @@ enum SectionType {
     Lambda,
     Method,
     Class,
+    Initializer,
 }
 
 impl<'a> ResolverContext<'a> {

@@ -201,8 +201,14 @@ pub enum ResolverError {
         span: SourceSpan,
     },
 
-    #[error("`this` can not be called outside of class context.")]
+    #[error("`this` cannot be called outside of class context.")]
     ThisOutsideClass {
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("Cannot return a value from an initializer.")]
+    ReturnInInit {
         #[label("{}", self)]
         span: SourceSpan,
     },
@@ -239,6 +245,10 @@ impl ResolverError {
 
     pub fn this_outside_class(span: Span) -> BolloxError {
         Self::ThisOutsideClass { span: span.into() }.into()
+    }
+
+    pub fn return_in_init(span: Span) -> BolloxError {
+        Self::ReturnInInit { span: span.into() }.into()
     }
 }
 
@@ -291,6 +301,13 @@ pub enum RuntimeError {
     #[error("Undefined property, got `{}`.", name)]
     UndefinedProperty {
         name: String,
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("Internal error: `{}`.", msg)]
+    InternalError {
+        msg: String,
         #[label("{}", self)]
         span: SourceSpan,
     },
@@ -352,6 +369,14 @@ impl RuntimeError {
     pub fn undefined_property(name: impl Display, span: Span) -> BolloxError {
         Self::UndefinedProperty {
             name: name.to_string(),
+            span: span.into(),
+        }
+        .into()
+    }
+
+    pub fn internal(msg: impl Display, span: Span) -> BolloxError {
+        Self::InternalError {
+            msg: msg.to_string(),
             span: span.into(),
         }
         .into()

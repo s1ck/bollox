@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::env::{Environment, EnvironmentRef};
+use crate::error::RuntimeError;
 use crate::interp::{InterpreterContext, InterpreterError, InterpreterOps};
 use crate::node::Node;
 use crate::stmt::{FunctionDeclaration, StmtNode};
@@ -48,15 +49,21 @@ pub struct Function<'a> {
     params: Rc<[Node<&'a str>]>,
     body: Rc<[StmtNode<'a>]>,
     closure: EnvironmentRef<'a>,
+    is_init: bool,
 }
 
 impl<'a> Function<'a> {
-    pub(crate) fn new(declaration: &FunctionDeclaration<'a>, closure: EnvironmentRef<'a>) -> Self {
+    pub(crate) fn new(
+        declaration: &FunctionDeclaration<'a>,
+        closure: EnvironmentRef<'a>,
+        is_init: bool,
+    ) -> Self {
         Self {
             name: declaration.name.item,
             params: Rc::clone(&declaration.params),
             body: Rc::clone(&declaration.body),
             closure,
+            is_init,
         }
     }
 
@@ -70,6 +77,7 @@ impl<'a> Function<'a> {
             params: Rc::clone(&self.params),
             body: Rc::clone(&self.body),
             closure: environment,
+            is_init: self.is_init,
         }
     }
 }
@@ -79,8 +87,17 @@ impl<'a> Function<'a> {
         &self,
         context: &mut InterpreterContext<'a>,
         args: &[Value<'a>],
-        _span: Span,
+        span: Span,
     ) -> Result<Value<'a>> {
+        // If the function is an initializer, we override the actual return
+        // value and foribly return `this`.
+        if self.is_init {
+            return self
+                .closure
+                .borrow()
+                .get_at("this", 0)
+                .ok_or_else(|| RuntimeError::internal("`this` not found in environment", span));
+        }
         // Each function call needs it's own environment to support recursion.
         // The enclosing environment is the one that is active when the method
         // is declared. This also gives access to globals in order to call funcs.
@@ -97,7 +114,15 @@ impl<'a> Function<'a> {
         match InterpreterOps::eval_stmts(context, &self.body, fun_environment.into()) {
             Ok(()) => Ok(Value::Nil),
             Err(e) => match e {
-                InterpreterError::Return(value) => Ok(value),
+                InterpreterError::Return(value) => {
+                    if self.is_init {
+                        self.closure.borrow().get_at("this", 0).ok_or_else(|| {
+                            RuntimeError::internal("`this` not found in environment", span)
+                        })
+                    } else {
+                        Ok(value)
+                    }
+                }
                 InterpreterError::Err(e) => Err(e),
             },
         }

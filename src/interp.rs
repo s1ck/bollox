@@ -110,7 +110,7 @@ impl InterpreterOps {
                 Ok(())
             }
             Stmt::Func(declaration) => {
-                let fun = Function::new(declaration, context.environment.clone());
+                let fun = Function::new(declaration, context.environment.clone(), false);
                 context
                     .environment
                     .borrow_mut()
@@ -132,7 +132,11 @@ impl InterpreterOps {
                     .map(|declaration| {
                         (
                             declaration.item.name.item,
-                            Function::new(&declaration.item, context.environment.clone()),
+                            Function::new(
+                                &declaration.item,
+                                context.environment.clone(),
+                                declaration.item.name.item == "init",
+                            ),
                         )
                     })
                     .collect::<HashMap<_, _>>();
@@ -227,7 +231,7 @@ impl InterpreterOps {
             },
             Expr::This { keyword } => Self::get_var(context, expr, keyword.item)?,
             Expr::Lambda { declaration } => {
-                Function::new(declaration, context.environment.clone()).into()
+                Function::new(declaration, context.environment.clone(), false).into()
             }
         };
 
