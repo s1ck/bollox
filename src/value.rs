@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::{cmp::Ordering, rc::Rc};
 
-use crate::callable::{Builtins, Callables};
+use crate::callable::{Builtins, Callables, Class, Instance};
 use crate::{
     callable::Function,
     error::RuntimeError,
@@ -18,7 +18,9 @@ pub enum Value<'a> {
     Number(f64),
     Str(Rc<str>),
     Fn(Rc<Function<'a>>),
+    Clazz(&'a Class<'a>),
     Builtin(Rc<Builtins>),
+    Instance(Rc<Instance<'a>>),
 }
 
 impl<'a> From<Literal<'_>> for Value<'a> {
@@ -41,6 +43,8 @@ impl<'a> Display for Value<'a> {
             Value::Number(n) => n.fmt(f),
             Value::Str(s) => s.fmt(f),
             Value::Fn(fun) => fun.fmt(f),
+            Value::Clazz(class) => class.fmt(f),
+            Value::Instance(instance) => instance.fmt(f),
             Value::Builtin(b) => b.fmt(f),
         }
     }
@@ -164,6 +168,7 @@ impl<'a> Value<'a> {
         let callable = match self {
             Value::Fn(f) => Callables::Fn(Rc::clone(f)),
             Value::Builtin(b) => Callables::Builtin(Rc::clone(b)),
+            Value::Clazz(c) => Callables::Clazz(c),
             v => return Err(RuntimeError::non_callable(v, span)),
         };
         Ok(callable)
@@ -201,5 +206,23 @@ impl<'a> From<String> for Value<'a> {
 impl<'a> From<Function<'a>> for Value<'a> {
     fn from(f: Function<'a>) -> Self {
         Value::Fn(Rc::from(f))
+    }
+}
+
+impl<'a> From<&'a mut Class<'a>> for Value<'a> {
+    fn from(c: &'a mut Class<'a>) -> Self {
+        Value::Clazz(c)
+    }
+}
+
+impl<'a> From<Instance<'a>> for Value<'a> {
+    fn from(i: Instance<'a>) -> Self {
+        Value::Instance(Rc::new(i))
+    }
+}
+
+impl<'a> From<Rc<Instance<'a>>> for Value<'a> {
+    fn from(i: Rc<Instance<'a>>) -> Self {
+        Value::Instance(i)
     }
 }

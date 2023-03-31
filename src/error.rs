@@ -181,22 +181,34 @@ pub enum ResolverError {
         span: SourceSpan,
     },
 
-    #[error("Variable already defined in this scope: `{}`", name)]
+    #[error("Variable already defined in this scope: `{}`.", name)]
     RedefinedVariable {
         name: String,
         #[label("{}", self)]
         span: SourceSpan,
     },
 
-    #[error("Function already defined in this scope: `{}`", name)]
+    #[error("Function already defined in this scope: `{}`.", name)]
     RedefinedFunction {
         name: String,
         #[label("{}", self)]
         span: SourceSpan,
     },
 
-    #[error("Can't return from top-level code")]
+    #[error("Can't return from top-level code.")]
     TopLevelReturn {
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("`this` cannot be called outside of class context.")]
+    ThisOutsideClass {
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("Cannot return a value from an initializer.")]
+    ReturnInInit {
         #[label("{}", self)]
         span: SourceSpan,
     },
@@ -229,6 +241,14 @@ impl ResolverError {
 
     pub fn top_level_return(span: Span) -> BolloxError {
         Self::TopLevelReturn { span: span.into() }.into()
+    }
+
+    pub fn this_outside_class(span: Span) -> BolloxError {
+        Self::ThisOutsideClass { span: span.into() }.into()
+    }
+
+    pub fn return_in_init(span: Span) -> BolloxError {
+        Self::ReturnInInit { span: span.into() }.into()
     }
 }
 
@@ -268,6 +288,26 @@ pub enum RuntimeError {
         lhs: String,
         rhs: String,
         op: BinaryOp,
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("Properties are only available on instances.")]
+    InvalidPropertyCall {
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("Undefined property, got `{}`.", name)]
+    UndefinedProperty {
+        name: String,
+        #[label("{}", self)]
+        span: SourceSpan,
+    },
+
+    #[error("Internal error: `{}`.", msg)]
+    InternalError {
+        msg: String,
         #[label("{}", self)]
         span: SourceSpan,
     },
@@ -317,6 +357,26 @@ impl RuntimeError {
             lhs: lhs.to_string(),
             rhs: rhs.to_string(),
             op,
+            span: span.into(),
+        }
+        .into()
+    }
+
+    pub fn invalid_property_call(span: Span) -> BolloxError {
+        Self::InvalidPropertyCall { span: span.into() }.into()
+    }
+
+    pub fn undefined_property(name: impl Display, span: Span) -> BolloxError {
+        Self::UndefinedProperty {
+            name: name.to_string(),
+            span: span.into(),
+        }
+        .into()
+    }
+
+    pub fn internal(msg: impl Display, span: Span) -> BolloxError {
+        Self::InternalError {
+            msg: msg.to_string(),
             span: span.into(),
         }
         .into()

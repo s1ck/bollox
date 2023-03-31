@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    callable::{Callable, Function},
+    callable::{Class, Function},
     env::{Environment, EnvironmentRef},
     error::{BolloxError, RuntimeError, SyntaxError},
     expr::{BinaryOp, Expr, ExprNode, LogicalOp, UnaryOp},
@@ -110,7 +110,7 @@ impl InterpreterOps {
                 Ok(())
             }
             Stmt::Func(declaration) => {
-                let fun = Function::new(declaration, context.environment.clone());
+                let fun = Function::new(declaration, context.environment.clone(), false);
                 context
                     .environment
                     .borrow_mut()
@@ -124,6 +124,32 @@ impl InterpreterOps {
                 }
                 None => Err(InterpreterError::Return(Value::Nil)),
             },
+            Stmt::Class(declaration) => {
+                let name = declaration.name.item;
+                let methods = declaration
+                    .methods
+                    .iter()
+                    .map(|declaration| {
+                        (
+                            declaration.item.name.item,
+                            Function::new(
+                                &declaration.item,
+                                context.environment.clone(),
+                                declaration.item.name.item == "init",
+                            ),
+                        )
+                    })
+                    .collect::<HashMap<_, _>>();
+
+                let class = Class::new(name, methods, context.environment.clone());
+                let class = Box::new(class);
+                let class = Box::leak(class);
+                context
+                    .environment
+                    .borrow_mut()
+                    .define(declaration.name.item, class.into());
+                Ok(())
+            }
         }
     }
 
@@ -184,8 +210,28 @@ impl InterpreterOps {
 
                 callable.call(context, &args, span)?
             }
+            Expr::Get { object, name } => match Self::eval_expr(context, object)? {
+                Value::Instance(instance) => match instance.get(name.item) {
+                    Some(value) => value,
+                    None => return Err(RuntimeError::undefined_property(name.item, name.span)),
+                },
+                _ => return Err(RuntimeError::invalid_property_call(name.span)),
+            },
+            Expr::Set {
+                object,
+                name,
+                value,
+            } => match Self::eval_expr(context, object)? {
+                Value::Instance(instance) => {
+                    let value = Self::eval_expr(context, value)?;
+                    instance.set(name.item, value.clone());
+                    value
+                }
+                _ => return Err(RuntimeError::invalid_property_call(name.span)),
+            },
+            Expr::This { keyword } => Self::get_var(context, expr, keyword.item)?,
             Expr::Lambda { declaration } => {
-                Function::new(declaration, context.environment.clone()).into()
+                Function::new(declaration, context.environment.clone(), false).into()
             }
         };
 
