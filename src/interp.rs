@@ -133,7 +133,25 @@ impl InterpreterOps {
                     None => None,
                 };
 
-                let name = declaration.name.item;
+                let class_name = declaration.name.item;
+                context
+                    .environment
+                    .borrow_mut()
+                    .define(class_name, Value::Nil);
+
+                if let Some(c) = superclass {
+                    // We create a new environment that contains a reference
+                    // to the super class. That environment will be the one
+                    // to execute the current class methods with so they can
+                    // find `super`.
+                    context.environment =
+                        Environment::with_enclosing(context.environment.clone()).into();
+                    context
+                        .environment
+                        .borrow_mut()
+                        .define("super", Value::Clazz(c));
+                }
+
                 let methods = declaration
                     .methods
                     .iter()
@@ -149,13 +167,25 @@ impl InterpreterOps {
                     })
                     .collect::<HashMap<_, _>>();
 
-                let class = Class::new(name, methods, superclass, context.environment.clone());
+                let class =
+                    Class::new(class_name, methods, superclass, context.environment.clone());
                 let class = Box::new(class);
                 let class = Box::leak(class);
+
+                if superclass.is_some() {
+                    let enclosing = context
+                        .environment
+                        .borrow_mut()
+                        .enclosing
+                        .clone()
+                        .expect("Superclass without subclass environment.");
+                    context.environment = enclosing;
+                }
                 context
                     .environment
                     .borrow_mut()
-                    .define(declaration.name.item, class.into());
+                    .assign(class_name, class.into());
+
                 Ok(())
             }
         }
@@ -167,7 +197,7 @@ impl InterpreterOps {
     ) -> Result<Value<'a>> {
         let span = expr.span;
         let value = match &*expr.item {
-            Expr::Variable { name } => Self::get_var(context, expr, name)?,
+            Expr::Variable { name } => Self::get_var(context, expr, name, 0)?,
             Expr::Assign { name, expr } => Self::assign_var(context, expr, name)?,
             Expr::Literal { lit } => Value::from(*lit),
             Expr::Group { expr } => Self::eval_expr(context, expr)?,
@@ -237,7 +267,39 @@ impl InterpreterOps {
                 }
                 _ => return Err(RuntimeError::invalid_property_call(name.span)),
             },
-            Expr::This { keyword } => Self::get_var(context, expr, keyword.item)?,
+            Expr::This { keyword } => Self::get_var(context, expr, keyword.item, 0)?,
+            Expr::Super { keyword, method } => {
+                let distance = context
+                    .locals
+                    .get(&expr.span)
+                    .expect("`super` has not been resolved correctly.")
+                    - 1;
+
+                let super_class = context
+                    .environment
+                    .borrow()
+                    .get_at(keyword.item, distance)
+                    .and_then(|value| match value {
+                        Value::Clazz(c) => Some(c),
+                        _ => None,
+                    })
+                    .expect("Value must be a Clazz");
+
+                let object = context
+                    .environment
+                    .borrow()
+                    .get_at("this", distance - 1)
+                    .and_then(|value| match value {
+                        Value::Instance(i) => Some(i),
+                        _ => None,
+                    })
+                    .expect("Value must be an Instance");
+
+                match super_class.get_method(method.item) {
+                    Some(method) => method.bind(object.clone()).into(),
+                    None => return Err(RuntimeError::undefined_property(method.item, method.span)),
+                }
+            }
             Expr::Lambda { declaration } => {
                 Function::new(declaration, context.environment.clone(), false).into()
             }
@@ -251,11 +313,17 @@ impl InterpreterOps {
         context: &mut InterpreterContext<'a>,
         expr: &ExprNode<'a>,
         name: &'a str,
+        offset: usize,
     ) -> Result<Value<'a>> {
         context
             .locals
             .get(&expr.span)
-            .and_then(|distance| context.environment.borrow().get_at(name, *distance))
+            .and_then(|distance| {
+                context
+                    .environment
+                    .borrow()
+                    .get_at(name, *distance + offset)
+            })
             .or_else(|| context.environment.borrow().get_global(name))
             .ok_or(SyntaxError::undefined_variable(name, expr.span))
     }
