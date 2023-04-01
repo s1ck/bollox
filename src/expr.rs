@@ -35,6 +35,10 @@ pub enum Expr<'a> {
     This {
         keyword: Node<&'a str>,
     },
+    Super {
+        keyword: Node<&'a str>,
+        method: Node<&'a str>,
+    },
     Logical {
         lhs: ExprNode<'a>,
         op: LogicalOp,
@@ -105,6 +109,10 @@ impl<'a> Expr<'a> {
 
     pub fn this(keyword: Node<&'a str>) -> Self {
         Self::This { keyword }
+    }
+
+    pub fn super_(keyword: Node<&'a str>, method: Node<&'a str>) -> Self {
+        Self::Super { keyword, method }
     }
 
     pub fn literal(lit: Literal<'a>) -> Self {

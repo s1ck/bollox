@@ -74,6 +74,11 @@ impl ResolverOps {
                 return Err(ResolverError::sub_eq_sup(superclass.span));
             }
             Self::resolve_expr(context, superclass)?;
+            // If the class declaration has a superclass, then we
+            // create a new scope surrounding all of its methods.
+            context.begin_scope();
+            context.declare("super");
+            context.define("super");
         }
 
         context.begin_section(SectionType::Class);
@@ -92,6 +97,10 @@ impl ResolverOps {
 
         context.end_scope();
         context.end_section();
+
+        if class.superclass.is_some() {
+            context.end_scope();
+        }
 
         Ok(())
     }
@@ -130,6 +139,10 @@ impl ResolverOps {
                 context.resolve_local(expr, keyword.item);
                 Ok(())
             }
+            Expr::Super { keyword, method: _ } => {
+                context.resolve_local(expr, keyword.item);
+                Ok(())
+            }
             Expr::Logical { lhs, op: _, rhs } => {
                 Self::resolve_expr(context, lhs)?;
                 Self::resolve_expr(context, rhs)?;
@@ -161,21 +174,15 @@ impl ResolverOps {
         function_type: SectionType,
     ) -> Result<()> {
         context.begin_section(function_type);
-        // resolve function name first, to allow for recursive calls
-        if context.declare(declaration.name.item).is_some() {
-            return Err(ResolverError::redefined_function(
-                declaration.name.item,
-                declaration.name.span,
-            ));
-        }
-        context.define(declaration.name.item);
-
         context.begin_scope();
+
         declaration.params.iter().for_each(|param| {
             context.declare(param.item);
             context.define(param.item);
         });
+
         Self::resolve_stmts(context, &declaration.body)?;
+
         context.end_scope();
         context.end_section();
 
@@ -192,6 +199,15 @@ impl ResolverOps {
             Stmt::Print(expr) => Self::resolve_expr(context, expr),
             Stmt::Var(name, initializer) => Self::resolve_variable(context, name, initializer),
             Stmt::Func(declaration) => {
+                // resolve function name first, to allow for recursive calls
+                if context.declare(declaration.name.item).is_some() {
+                    return Err(ResolverError::redefined_function(
+                        declaration.name.item,
+                        declaration.name.span,
+                    ));
+                }
+                context.define(declaration.name.item);
+
                 Self::resolve_function(context, declaration, SectionType::Function)
             }
             Stmt::If(condition, then_branch, else_branch) => {

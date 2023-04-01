@@ -471,7 +471,9 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
         Ok(expr)
     }
 
-    // primary -> NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
+    // primary -> "true" | "false" | "nil" | "this"
+    //         | NUMBER | STRING | IDENTIFIER | "(" expression ")"
+    //         | "super" "." IDENTIFIER ;
     fn primary(&mut self) -> Result<ExprNode<'a>> {
         let (node, span) = match self.tokens.next() {
             Some((False, span)) => (Expr::fals(), span),
@@ -494,9 +496,17 @@ impl<'a, I: Iterator<Item = Tok>> Parser<'a, I> {
                 (Expr::group(expr), span.union(end).into())
             }
             Some((This, span)) => {
-                let value = self.source.slice(span);
-                let value = Node::new(value, span);
-                (Expr::this(value), span)
+                let keyword = self.source.slice(span);
+                let keyword = Node::new(keyword, span);
+                (Expr::this(keyword), span)
+            }
+            Some((Super, span)) => {
+                let keyword = self.source.slice(span);
+                let keyword = Node::new(keyword, span);
+                let dot_span = self.expect(Dot)?;
+                let method = self.identifier(dot_span)?;
+                let span = span.union(method.span).into();
+                (Expr::super_(keyword, method), span)
             }
             Some((Identifier, span)) => {
                 let value = self.source.slice(span);

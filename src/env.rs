@@ -9,7 +9,7 @@ pub(crate) type EnvironmentRef<'a> = Rc<RefCell<Environment<'a>>>;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct Environment<'a> {
-    enclosing: Option<Rc<RefCell<Environment<'a>>>>,
+    pub(crate) enclosing: Option<Rc<RefCell<Environment<'a>>>>,
     values: HashMap<&'a str, Value<'a>>,
 }
 
